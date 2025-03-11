@@ -1,0 +1,14 @@
+{
+    "name": "Sequence 64 x 784",
+    "iterationCount": 1000,
+    "layerSize": 64,
+    "thickness": 784,
+    "delayDepth": 1,
+    "threshold": 12,
+    "interconnectCount": 1,
+    "outputWidth": 2,
+    "selectedInitializer": 0,
+    "initializers": [
+        "sequence_initializer"
+    ]
+}

@@ -1,0 +1,14 @@
+#!/bin/bash
+echo $(pwd)
+docker run \
+--gpus all \
+-it \
+--rm \
+--name=tf-spiking-neuron \
+-p 0.0.0.0:6006:6006 \
+-p 0.0.0.0:23:22 \
+--runtime=nvidia \
+-v "$(pwd)":/tensorflow \
+-v /media/internal/record/tfspikingnn:/record \
+louisross/tensorflow:1.1 \
+bash

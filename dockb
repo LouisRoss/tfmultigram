@@ -1,0 +1,2 @@
+#!/bin/bash
+docker image build -t louisross/tensorflow:1.0 .
