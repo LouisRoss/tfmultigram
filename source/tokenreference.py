@@ -9,7 +9,7 @@ class TokenReference(TokenBase):
     """
 
     def __init__(self, ref_tokens: list[TokenBase]):
-        super().__init__()
+        super().__init__('TokenReference')
         self.token_raw = ref_tokens
 
         # Tokens with fewer non-null bytes than this are not significant.
@@ -68,6 +68,7 @@ class TokenReference(TokenBase):
         
         equal = len(self.token_raw) == len(ref_token.token_raw)
         if equal:
+            # If any byte does not compare, these are not equal.
             for i in range(len(self.token_raw)):
                 if not self.token_raw[i].IsEqualTo(ref_token.token_raw[i]):
                     equal = False
@@ -76,3 +77,13 @@ class TokenReference(TokenBase):
         return equal
     
         
+    def GetAsString(self) -> str:
+        """
+        For logging and analysis, get this token as a string.
+        returns: The string value this token encodes.
+        """
+        value = "UNEXPECTED" if self.unexpected else ""
+        for token in self.token_raw:
+            value += token.GetAsString() + " "
+        return value.strip()
+    

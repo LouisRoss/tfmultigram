@@ -2,6 +2,8 @@ import sys
 from abc import ABC, abstractmethod
 from settings import Settings, MultigramState
 
+from tokensynapse import TokenSynapse
+
 class TokenBase(ABC):
     """
     Base class for token management.
@@ -13,9 +15,13 @@ class TokenBase(ABC):
         self.token_type = token_type
 
         self.OrgnizeSeen = False
-        self.CurrentActivityFromPreviousTokens = 0.0
-        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]    
         self.CurrentStrength = 0
+
+        self.TotalConnectionStrength = [int]
+        self.Connections = []
+        self.ConnectionCount = [0 for i in range(Settings.max_token_strength)]    
+        self.TotalConnectionStrength = [0 for i in range(Settings.max_token_strength)]    
+        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]    
 
 
     def CaptureNewActivity(self) -> None:
@@ -51,7 +57,7 @@ class TokenBase(ABC):
         returns: True if similar enough to be called 'seen'
         """
         seen = False
-        if self.CheckIfSimilar(ref_token, threshold_score) >= threshold_score:
+        if self.CheckIfTokenSimilar(ref_token) >= threshold_score:
             seen = True
 
         return seen
@@ -70,6 +76,63 @@ class TokenBase(ABC):
         """
         if self.CurrentStrength > 0:
             self.CurrentStrength -= 1
+
+
+    def IsRelatedTo(self, ref_token: 'TokenBase') -> bool:
+        """
+        The reference token passed in is related to this token
+        if this token has been triggered recently, and its strength
+        has not yet decayed to zero.
+        /// </summary>
+        ref_token: A token to check the relation to this token
+        returns: True if the reference token is related to this token
+        """
+        related = False
+
+        if self.CurrentStrength > 0 and ref_token.CurrentStrength > 0:
+            related = True
+
+        return related
+    
+
+    def BumpRelationship(self, ref_token: 'TokenBase') -> None:
+        """
+        Bump the relationship between this token and the reference token.
+        This is done by increasing the strength of the connection.
+        ref_token: A token to bump the relationship with
+        """
+        if ref_token.CurrentStrength != Settings.max_token_strength or \
+            ref_token.CurrentStrength <= self.CurrentStrength or \
+            self.CurrentStrength == 0:
+                return
+        
+
+        distance = ref_token.CurrentStrength - self.CurrentStrength
+
+
+    def BumpRelationship(self, ref_token: 'TokenBase', distance: int) -> None:
+        """
+        Bump the relationship between this token and the reference token.
+        This is done by increasing the strength of the connection.
+        ref_token: A token to bump the relationship with
+        strength: The strength of the relationship
+        distance: The distance between this token and the reference token
+        """
+        connected_synapse = None
+
+        for synapse in self.Connections:
+            if synapse.Distance == distance and synapse.FollowingToken.IsEqualTo(ref_token):
+                connected_synapse = synapse
+                break
+
+        if connected_synapse is None:
+            connected_synapse = TokenSynapse(ref_token, 0, distance)
+            self.Connections.append(connected_synapse)
+
+        if not connected_synapse is None:
+            connected_synapse.Strength += 1
+
+
 
 
     @abstractmethod

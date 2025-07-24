@@ -1,7 +1,7 @@
 """
 """
-from tokenbase import TokenBase
 from tokenstring import TokenString
+from tokenreference import TokenReference
 from settings import Settings, MultigramState
 
 
@@ -65,7 +65,7 @@ class MultiGram:
             return
 
         # If we are not settling (or have just finished settling), make connections.
-        token_bytes = self.token_source.get_next()
+        token_bytes = self.token_source.GetNext()
         if token_bytes is not None:
             # Insert or find the token, strengthen existing connections or make new ones.
             self.ConnectToken(token_bytes, self.threshold_score)
@@ -74,8 +74,8 @@ class MultiGram:
             self.Tick()
 
             # Detect end of line, establish a settle period to separate lines.
-            if token_bytes is TokenString:
-                if token_bytes.IsEndOfLine():
+            if isinstance(token_bytes,  TokenString):
+                if token_bytes.end_of_line:
                     # Allow all token strengths to settle to zero.
                     self.settle_count = Settings.max_token_strength
         else:
@@ -223,7 +223,7 @@ class MultiGram:
             a_token = self.tokens[i]
             if a_token is not None:
                 # There is a used token here, allow it to recognize the reference.
-                if a_token.CheckIfTokenSeen(a_token, threshold_score):
+                if a_token.CheckIfTokenSeen(token, threshold_score):
                     # We found an existing token, trigger it.
                     a_token.TriggerToken()
 
@@ -231,9 +231,14 @@ class MultiGram:
                     seen = True
                     inserted_token = a_token
                     break
+            else:
+                # This is the first unused token, remember it.
+                if first_unused_token == -1:
+                    first_unused_token = i
+
 
         # If no token recognized the reference, add a new token here.
-        if not seen and first_unused_token == -1:
+        if not seen and first_unused_token != -1:
             # Keep reference to the new token here.
             self.tokens[first_unused_token] = token
             inserted_token = token

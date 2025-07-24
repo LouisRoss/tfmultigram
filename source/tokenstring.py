@@ -9,7 +9,7 @@ class TokenString(TokenBase):
     """
 
     def __init__(self, value: str):
-        super().__init__()
+        super().__init__('TokenString')
         self.token_raw = value
         self.end_of_line = False
 

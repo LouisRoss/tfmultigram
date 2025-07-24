@@ -1,4 +1,5 @@
 import sys
+from enum import Enum
 
 class Settings:
     history_length = 10
@@ -6,7 +7,7 @@ class Settings:
     max_token_size = 20
     max_connected_tokens = 100
     decay_from_previous_activity = 2.0
-    max_tokens = 2048
+    max_tokens = 100000
     null_distance = 0.5
     null_distance_dead = 0.2
     max_flux_per_connection = 0.5
@@ -19,7 +20,7 @@ class Settings:
         0.003, 0.002, 0.002, 0.001, 0.001
     ]
 
-class MultigramState(sys.enum):
+class MultigramState(Enum):
     """
     Enum for the state of the MultiGram.
     """
