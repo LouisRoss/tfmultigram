@@ -25,6 +25,7 @@ class TokenString(TokenBase):
         """
         if not isinstance(ref_token,  TokenString):
             return 0
+
         
         return sys.maxsize if self.GetAsString() == ref_token.GetAsString() else 0
     
