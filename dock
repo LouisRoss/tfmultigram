@@ -5,11 +5,10 @@ docker run \
 -it \
 --rm \
 --name=tf-spiking-neuron \
--p 0.0.0.0:6006:6006 \
 -p 0.0.0.0:23:22 \
 --runtime=nvidia \
 -v "$(pwd)":/tensorflow \
 -v /media/internal/record/tfspikingnn:/record \
 -v /var/log:/log \
-louisross/tensorflow:1.1 \
+louisross/tensorflow:1.2 \
 bash

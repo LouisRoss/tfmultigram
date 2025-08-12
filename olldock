@@ -1,0 +1,10 @@
+#!/bin/bash
+docker run \
+--gpus all \
+-it \
+--rm \
+--name=ollama \
+-p 11434:11434 \
+-v "$(pwd)":/ollama \
+louisross/ollama:1 \
+
