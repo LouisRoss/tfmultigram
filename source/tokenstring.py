@@ -23,7 +23,7 @@ class TokenString(TokenBase):
         ref_token: Reference token to compare with this token
         returns: Similarity measure between 0 and sys.maxsize
         """
-        if not ref_token is TokenString:
+        if not isinstance(ref_token,  TokenString):
             return 0
         
         return sys.maxsize if self.GetAsString() == ref_token.GetAsString() else 0
