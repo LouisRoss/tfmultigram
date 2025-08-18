@@ -62,6 +62,24 @@ class TokenBase(ABC):
 
         return seen
     
+    def FindTokenIfSeen(self, tokens: list['TokenBase'], threshold_score: float = 1.0) -> 'TokenBase':
+        """
+        Examine all tokens for any that recognize this token.
+        returns: The reference token if seen, None otherwise
+        """
+        inserted_token = None
+        for i in range(len(tokens)):
+            a_token = tokens[i]
+            if a_token is not None:
+                # There is a used token here, allow it to recognize the reference.
+                if a_token.CheckIfTokenSeen(self, threshold_score):
+                    # A token has recognized the reference, we don't need to add one.
+                    inserted_token = a_token
+                    break
+
+        return inserted_token
+    
+    
     def TriggerToken(self):
         """
         When a token is seen, its strength is set to the maximum possible.

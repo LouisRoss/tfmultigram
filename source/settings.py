@@ -7,7 +7,7 @@ class Settings:
     max_token_size = 20
     max_connected_tokens = 100
     decay_from_previous_activity = 2.0
-    max_tokens = 100000
+    max_tokens = 5000
     null_distance = 0.5
     null_distance_dead = 0.2
     max_flux_per_connection = 0.5
@@ -19,6 +19,11 @@ class Settings:
         0.006, 0.005, 0.004, 0.004, 0.003,
         0.003, 0.002, 0.002, 0.001, 0.001
     ]
+    embeddings = {
+        'embedding_length': 768,
+        'embedding_count': 5000,
+        'threshold_score': 0.9
+    }
 
 class MultigramState(Enum):
     """

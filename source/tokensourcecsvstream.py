@@ -1,6 +1,6 @@
 import re
 from tokenbase import TokenBase
-from tokenstring import TokenString
+from tokenstringembed import TokenStringEmbed
 from tokentimestamp import TokenTimestamp
 from tokensourcebase import TokenSourceBase
 
@@ -12,9 +12,10 @@ class TokenSourceCSVStream(TokenSourceBase):
     This class implements the abstract methods defined in TokenSourceBase.
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename, max_lines=0):
         super().__init__()
         self.log_filename = filename
+        self.max_lines = max_lines
 
         self.Reset()
 
@@ -96,12 +97,19 @@ class TokenSourceCSVStream(TokenSourceBase):
         line = self.istream.readline()
         self.line_count_read += 1
         if self.line_count_read % 100 == 0:
+            print()
+            print('************************************************')
             print(f"Read {self.line_count_read} lines from {self.log_filename}")
+            print('************************************************')
 
-        if not line:
+        if not line or (self.max_lines > 0 and self.line_count_read >= self.max_lines):
+            print()
+            print('************************************************')
+            print(f"Read {self.line_count_read} lines from {self.log_filename}")
+            print('************************************************')
             self.last_line_read = None
             return
-        
+
         self.last_line_read = re.split("\s", line.strip())
 
 
@@ -113,7 +121,7 @@ class TokenSourceCSVStream(TokenSourceBase):
         the last line read was empty, and where previous calls
         to this method have exhausted all tokens from LastLineRead.
         When this method is called with the resulting empty LastLineRead,
-        it generates a TokenSTring with .EndOfLine set, and nulls LastLineRead.
+        it generates a TokenStringEmbed with .EndOfLine set, and nulls LastLineRead.
 
         returns: The next token from LastLineRead, or null if none exist.
         """
@@ -127,9 +135,9 @@ class TokenSourceCSVStream(TokenSourceBase):
                     next_token = TokenTimestamp(token_value)
                 else:
                     # Otherwise, create a TokenBase object
-                    next_token = TokenString(token_value)
+                    next_token = TokenStringEmbed(token_value)
             else:
-                next_token = TokenString('')
+                next_token = TokenStringEmbed('')
                 next_token.end_of_line = True
 
                 self.last_line_read = None

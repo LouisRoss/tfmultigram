@@ -26,7 +26,7 @@ class TokenString(TokenBase):
         if not isinstance(ref_token,  TokenString):
             return 0
 
-        
+
         return sys.maxsize if self.GetAsString() == ref_token.GetAsString() else 0
     
     def IsEqualTo(self, ref_token):
@@ -38,7 +38,7 @@ class TokenString(TokenBase):
         ref_token: A reference token to compare with this token
         returns: True if tokens encode the same value, false otherwise
         """
-        if not ref_token is TokenString:
+        if not isinstance(ref_token,  TokenString):
             return False
 
         return self.GetAsString() == ref_token.GetAsString()

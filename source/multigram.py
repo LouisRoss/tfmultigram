@@ -1,12 +1,13 @@
 """
 """
+from tokenbase import TokenBase
 from tokenstring import TokenString
 from tokenreference import TokenReference
 from settings import Settings, MultigramState
 
 
 class MultiGram:
-    def __init__(self, source, threshold=0.5):
+    def __init__(self, source, threshold=0.95):
         self.state = MultigramState.IDLE
         self.current_line_estimated_count = 0
         self.current_token_estimated_count = 0
@@ -17,6 +18,7 @@ class MultiGram:
         self.eol_token_next = False
 
         self.tokens = [None for i in range(Settings.max_tokens)]    
+        self.next_token_index = 0
 
         # Support for following behavior.
         self.recently_followed_tokens = []
@@ -212,40 +214,21 @@ class MultiGram:
         thresholdScore: How similar tokens must be to be considered the same.
         returns: The added token or one found in the Multigram already, identical with the added token.
         """
-        seen = False
-        first_unused_token = -1
-
-        # Examine all tokens in the map.  For any that recognize the reference token,
-        # let them set their excitation level.  While in the loop, capture the index
-        # of the first unused token, in case none recognizes the reference, and we need to add one.
-        inserted_token = None
-        for i in range(len(self.tokens)):
-            a_token = self.tokens[i]
-            if a_token is not None:
-                # There is a used token here, allow it to recognize the reference.
-                if a_token.CheckIfTokenSeen(token, threshold_score):
-                    # We found an existing token, trigger it.
-                    a_token.TriggerToken()
-
-                    # A token has recognized the reference, we don't need to add one.
-                    seen = True
-                    inserted_token = a_token
-                    break
-            else:
-                # This is the first unused token, remember it.
-                if first_unused_token == -1:
-                    first_unused_token = i
+        inserted_token = token.FindTokenIfSeen(self.tokens, threshold_score)
+        if inserted_token is None:
+            # print(f"Adding new token: {token.token_raw} at index {self.next_token_index}")
+            if self.next_token_index < Settings.max_tokens:
+                self.tokens[self.next_token_index] = token
+                inserted_token = token
+                self.next_token_index += 1
+        else:
+            # print(f"Found existing token: {inserted_token.token_raw} at index {self.tokens.index(inserted_token)}")
+            pass
 
 
-        # If no token recognized the reference, add a new token here.
-        if not seen and first_unused_token != -1:
-            # Keep reference to the new token here.
-            self.tokens[first_unused_token] = token
-            inserted_token = token
-
-            # Trigger this new token.
+        # Trigger this new token.
+        if inserted_token is not None:
             inserted_token.TriggerToken()
-
         return inserted_token
 
 
