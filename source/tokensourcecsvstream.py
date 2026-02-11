@@ -1,6 +1,7 @@
 import re
 from tokenbase import TokenBase
-from tokenstringembed import TokenStringEmbed
+from tokenstring import TokenString
+#from tokenstringembed import TokenStringEmbed
 from tokentimestamp import TokenTimestamp
 from tokensourcebase import TokenSourceBase
 
@@ -61,7 +62,7 @@ class TokenSourceCSVStream(TokenSourceBase):
 
 
 
-    def GetNext(self) -> TokenBase:
+    def GetNext(self, flags: int = 0) -> TokenBase:
         """
         Overridden methos to read a new token from the input stream and return that token.
         Return null if we have reached the end of the stream and no
@@ -121,7 +122,7 @@ class TokenSourceCSVStream(TokenSourceBase):
         the last line read was empty, and where previous calls
         to this method have exhausted all tokens from LastLineRead.
         When this method is called with the resulting empty LastLineRead,
-        it generates a TokenStringEmbed with .EndOfLine set, and nulls LastLineRead.
+        it generates a TokenString with .EndOfLine set, and nulls LastLineRead.
 
         returns: The next token from LastLineRead, or null if none exist.
         """
@@ -135,9 +136,9 @@ class TokenSourceCSVStream(TokenSourceBase):
                     next_token = TokenTimestamp(token_value)
                 else:
                     # Otherwise, create a TokenBase object
-                    next_token = TokenStringEmbed(token_value)
+                    next_token = TokenString(token_value)
             else:
-                next_token = TokenStringEmbed('')
+                next_token = TokenString('')
                 next_token.end_of_line = True
 
                 self.last_line_read = None
