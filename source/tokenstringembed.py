@@ -9,7 +9,7 @@ from tfnodehelper import EmbeddingModule
 OLLAMA_HOST = '192.168.1.142'
 OLLAMA_PORT = 11434
 OLLAMA_URL = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
-OLLAMA_MODEL = "nomic-embed-text:latest"
+OLLAMA_MODEL = "embeddinggemma"
 
 EMPTY_EMBEDDING = [0.0] * 768  # Assuming the embedding size is 768, adjust as necessary
 EMPTY_EMBEDDING[0] = 1.0  # Set the first element to 1.0 to indicate an empty embedding
@@ -91,8 +91,7 @@ class TokenStringEmbed(TokenBase):
         if not isinstance(ref_token,  TokenStringEmbed):
             return False
 
-        return self.CheckIfTokenSimilar(ref_token) > 0.99
-    
+        return self.CheckIfTokenSimilar(ref_token) > TokenStringEmbed.threshold_score    
     def GetAsString(self) -> str:
         """
         For logging and analysis, get this token as a string.
