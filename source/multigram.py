@@ -2,8 +2,9 @@
 """
 from tokenbase import TokenBase
 from tokenstring import TokenString
+#from tokenstringembed import TokenStringEmbed
 from tokenreference import TokenReference
-from settings import Settings, MultigramState
+from settings import Settings, MultigramState, TokenSourceFlags
 
 
 class MultiGram:
@@ -61,6 +62,8 @@ class MultiGram:
             self.settle_count -= 1
             if self.settle_count <= 0:
                 self.ClearRecentMemory()
+                start_of_sequence_token = self.token_source.GetNext(TokenSourceFlags.Flag_StartOfSequence)
+                self.ConnectToken(start_of_sequence_token, 0)
                 self.settle_count = 0
 
         if self.token_source is None or self.settle_count != 0:
@@ -300,8 +303,8 @@ class MultiGram:
         the specified token in at the front.
         token: The new token to add at the front of the shift register.
         """
-        self.recent.pop(0)
-        self.recent.append(token)
+        self.recent.pop()
+        self.recent.insert(0, token)
 
     def CountUsedTokens(self):
         """

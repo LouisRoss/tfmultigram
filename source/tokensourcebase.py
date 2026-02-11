@@ -33,7 +33,7 @@ class TokenSourceBase(ABC):
         pass
 
     @abstractmethod
-    def GetNext(self) -> TokenBase:
+    def GetNext(self, flags: int = 0) -> TokenBase:
         """
         Returns the next token from the source.
         If no more tokens are available, returns None.

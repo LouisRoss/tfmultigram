@@ -1,5 +1,5 @@
 import sys
-from enum import Enum
+from enum import Enum, IntEnum
 
 class Settings:
     history_length = 10
@@ -8,6 +8,7 @@ class Settings:
     max_connected_tokens = 100
     decay_from_previous_activity = 2.0
     max_tokens = 5000
+    StartOfSequenceTokenValue = "**StartOfSequence**"
     null_distance = 0.5
     null_distance_dead = 0.2
     max_flux_per_connection = 0.5
@@ -24,6 +25,12 @@ class Settings:
         'embedding_count': 5000,
         'threshold_score': 0.9
     }
+
+class TokenSourceFlags(IntEnum):
+    """
+    Enum for the flags of token source.
+    """
+    Flag_StartOfSequence = 1
 
 class MultigramState(Enum):
     """

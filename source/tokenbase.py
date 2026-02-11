@@ -14,6 +14,7 @@ class TokenBase(ABC):
     def __init__(self, token_type: str):
         self.token_type = token_type
 
+        self.start_of_sequence = False
         self.OrgnizeSeen = False
         self.CurrentStrength = 0
 
@@ -68,14 +69,15 @@ class TokenBase(ABC):
         returns: The reference token if seen, None otherwise
         """
         inserted_token = None
-        for i in range(len(tokens)):
-            a_token = tokens[i]
-            if a_token is not None:
-                # There is a used token here, allow it to recognize the reference.
-                if a_token.CheckIfTokenSeen(self, threshold_score):
-                    # A token has recognized the reference, we don't need to add one.
-                    inserted_token = a_token
-                    break
+        if tokens is not None:
+            for i in range(len(tokens)):
+                a_token = tokens[i]
+                if a_token is not None:
+                    # There is a used token here, allow it to recognize the reference.
+                    if a_token.CheckIfTokenSeen(self, threshold_score):
+                        # A token has recognized the reference, we don't need to add one.
+                        inserted_token = a_token
+                        break
 
         return inserted_token
     
