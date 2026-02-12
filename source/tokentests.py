@@ -16,13 +16,12 @@ def FindMostLikelyNextToken(multigram: MultiGram, token_history: list[TokenStrin
         token = token_history[-distance]
         distance_multiplier = len(token_history) - distance + 1
 
-        for connection in token.Connections:
+        for connection in token.Connections[distance - 1]:  # Assuming distance 1 connections are at index 0
             #print(f'Examining connection from {token.token_raw} to {connection.FollowingToken.token_raw if connection.FollowingToken is not None else "<None>"} with strength {connection.Strength} at distance {connection.Distance}')
-            if connection.Distance == distance:
-                if distance > 1 and connection.FollowingToken in likely_tokens:
-                    likely_tokens[connection.FollowingToken] += connection.Strength * distance_multiplier
-                elif distance == 1 and connection.FollowingToken not in likely_tokens:
-                    likely_tokens[connection.FollowingToken] = connection.Strength * distance_multiplier
+            if distance > 1 and connection.FollowingToken in likely_tokens:
+                likely_tokens[connection.FollowingToken] += connection.Strength * distance_multiplier
+            elif distance == 1 and connection.FollowingToken not in likely_tokens:
+                likely_tokens[connection.FollowingToken] = connection.Strength * distance_multiplier
 
     print()
     print('*************************************************')
@@ -32,14 +31,13 @@ def FindMostLikelyNextToken(multigram: MultiGram, token_history: list[TokenStrin
     print('*************************************************')
     print()
 
-    likely_token = None
-    max_strength = 0
-    for token, strength in likely_tokens.items():
-        if strength > max_strength and strength >= threshold:
-            likely_token = token
-            max_strength = strength
-
-    print(f'Most likely next token for "{token_history[-1].token_raw}" is {likely_token.token_raw if likely_token is not None else "<None>"} with strength {max_strength}')
+    likely_token = max(likely_tokens, key=likely_tokens.get, default=None)
+    if likely_token is not None and likely_tokens[likely_token] < threshold:
+        likely_token = None
+    
+    if likely_token is not None:
+        max_strength = likely_tokens[likely_token] if likely_token is not None else 0
+        print(f'Most likely next token for "{token_history[-1].token_raw}" is {likely_token.token_raw if likely_token is not None else "<None>"} with strength {max_strength}')
 
     return likely_token
 
@@ -101,7 +99,7 @@ def GenerateBestFitString(multigram: MultiGram, tokens: list['str']) -> list['st
 
     for next_prompt in tokens[1:]:
         token_prompt = TokenString(next_prompt)
-        prompt_possible = [c.FollowingToken for c in token.Connections if c.Distance == 1 and c.FollowingToken is not None]
+        prompt_possible = [c.FollowingToken for c in token.Connections[0] if c.FollowingToken is not None]
         print(f'Finding possible next prompts for {token.token_raw}: {[p.token_raw for p in prompt_possible]}')
         if isinstance(token_prompt, TokenStringEmbed):
             prompt_similarities = [dot(token_prompt.embedding, p.embedding) for p in prompt_possible]

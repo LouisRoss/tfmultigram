@@ -18,17 +18,17 @@ class TokenBase(ABC):
         self.OrgnizeSeen = False
         self.CurrentStrength = 0
 
-        self.TotalConnectionStrength = [int]
-        self.Connections = []
-        self.ConnectionCount = [0 for i in range(Settings.max_token_strength)]    
-        self.TotalConnectionStrength = [0 for i in range(Settings.max_token_strength)]    
-        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]    
+        self.Connections = [[] for i in range(Settings.max_token_strength)]
+        self.NomalizedConnections = [[] for i in range(Settings.max_token_strength)]
+        self.ConnectionCount = [0 for i in range(Settings.max_token_strength)]
+        self.TotalConnectionStrength = [0 for i in range(Settings.max_token_strength)]
+        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]
 
 
     def CaptureNewActivity(self) -> None:
         """
         """
-        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]    
+        self.CurrentActivityFromPreviousTokens = [0.0 for i in range(Settings.max_token_strength)]
 
     def create_token(self, user_id: str) -> str:
         """
@@ -140,14 +140,14 @@ class TokenBase(ABC):
         """
         connected_synapse = None
 
-        for synapse in self.Connections:
-            if synapse.Distance == distance and synapse.FollowingToken.IsEqualTo(ref_token):
+        for synapse in self.Connections[distance - 1]:
+            if synapse.FollowingToken.IsEqualTo(ref_token):
                 connected_synapse = synapse
                 break
 
         if connected_synapse is None:
-            connected_synapse = TokenSynapse(ref_token, 0, distance)
-            self.Connections.append(connected_synapse)
+            connected_synapse = TokenSynapse(ref_token, 0)
+            self.Connections[distance - 1].append(connected_synapse)
 
         if not connected_synapse is None:
             connected_synapse.Strength += 1

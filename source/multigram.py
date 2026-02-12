@@ -259,8 +259,8 @@ class MultiGram:
         
         connection_to_following_tokan = None
 
-        for connection in self.most_recently_followed_token.connections:
-            if connection.distance == 1 and connection.following_token.IsEqualTo(next_token):
+        for connection in self.most_recently_followed_token.connections[0]:  # Assuming distance 1 connections are at index 0
+            if connection.following_token.IsEqualTo(next_token):
                 connection_to_following_tokan = connection
                 break
 

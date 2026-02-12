@@ -2,6 +2,8 @@ import numpy as np
 from settings import Settings
 from tokenbase import TokenBase
 
+# NOTE: This is out of date, as token.Connections is now a list of lists, where each inner list corresponds to a specific distance. 
+# The code will need to be updated to reflect this change.
 class MultigramInfer:
     def __init__(self):
         self.Predictions = []

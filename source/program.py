@@ -14,11 +14,11 @@ def DisplayRelationships(multigram: MultiGram, token: TokenString):
     This function iterates through the tokens and prints their relationships.
     """
     print(f"Token: '{token.token_raw}'")
-    for distance in range(Settings.max_token_strength):
-        print(f"  Token: '{token.token_raw}' at distance {distance + 1}:")
-        for connection in token.Connections:
-            if connection.Distance == distance + 1 and connection.Strength > 1:
-                print(f"    Connected to: {connection.FollowingToken.token_raw} with strength {connection.Strength} at distance {connection.Distance}")
+    for distance in range(1, len(token.Connections) + 1):
+        print(f"  Token: '{token.token_raw}' at distance {distance}:")
+        for connection in token.Connections[distance - 1]:
+            if connection.Strength > 1:
+                print(f"    Connected to: {connection.FollowingToken.token_raw} with strength {connection.Strength} at distance {distance}")
     print()
 
     #for token in multigram.tokens:

@@ -7,7 +7,7 @@ class TokenSynapse:
     owns this synapse.
     NOTE: after must be a TokenBase object.
     """
-    def __init__(self, after, strength:int=0, distance:int=0):
+    def __init__(self, after, strength:int=0):
         """
          A synapse must be provided with the following
         token, the initial strength, and the distance between this token
@@ -19,13 +19,12 @@ class TokenSynapse:
         """
         self.FollowingToken = after
         self.Strength = strength
-        self.Distance = distance
 
 
     def Dump(self) -> None:
         """
         Print a string representation of this synapse.
         """
-        print(f"   TokenSynapse connects preceding token to {self.FollowingToken.GetAsString()} with a strength of {self.Strength} at a distance of {self.Distance})")
+        print(f"   TokenSynapse connects preceding token to {self.FollowingToken.GetAsString()} with a strength of {self.Strength}")
 
        
