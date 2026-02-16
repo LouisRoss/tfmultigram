@@ -1,3 +1,5 @@
+import random
+
 from multigram import MultiGram
 from tokenbase import TokenBase
 from tokenstringembed import TokenStringEmbed
@@ -19,15 +21,15 @@ def FindMostLikelyNextToken(multigram: MultiGram, token_history: list[TokenStrin
         for connection in token.Connections[distance - 1]:  # Assuming distance 1 connections are at index 0
             #print(f'Examining connection from {token.token_raw} to {connection.FollowingToken.token_raw if connection.FollowingToken is not None else "<None>"} with strength {connection.Strength} at distance {connection.Distance}')
             if distance > 1 and connection.FollowingToken in likely_tokens:
-                likely_tokens[connection.FollowingToken] += connection.Strength * distance_multiplier
+                likely_tokens[connection.FollowingToken] += connection.SoftmaxStrength * distance_multiplier
             elif distance == 1 and connection.FollowingToken not in likely_tokens:
-                likely_tokens[connection.FollowingToken] = connection.Strength * distance_multiplier
+                likely_tokens[connection.FollowingToken] = connection.SoftmaxStrength * distance_multiplier
 
     print()
     print('*************************************************')
     print(f'Finding next likely token out of {len(likely_tokens)} possibilities after ' + ' -> '.join(token_history[i].token_raw for i in range(0, len(token_history))))
-    #for token, strength in likely_tokens.items():
-    #    print(f'  Possible next token: {token.token_raw} with strength {strength}')
+    for token, strength in likely_tokens.items():
+        print(f"  Possible next token: '{token.token_raw}' with strength {strength}")
     print('*************************************************')
     print()
 
@@ -52,7 +54,7 @@ def GenerateLikelyString(multigram: MultiGram, token: TokenString) -> str:
     while token is not None:
         result.append(token)
         #print(token.token_raw)
-        token = FindMostLikelyNextToken(multigram, result)
+        token = FindBestNextToken(multigram, result)
 
     string_result = [t.token_raw if t is not None else '<None>' for t in result]
     return ' -> '.join(string_result)
@@ -124,3 +126,54 @@ def GenerateBestFitString(multigram: MultiGram, tokens: list['str']) -> list['st
 
     string_result = [t.token_raw if t is not None else '<None>' for t in result]
     return ' -> '.join(string_result)
+
+
+def GenerateRandomSentence(multigram: MultiGram) -> str:
+    strting_token = TokenString(Settings.StartOfSequenceTokenValue)
+    root_token = strting_token.FindTokenIfSeen(tokens = multigram.tokens, threshold_score = 1.0)
+    random_root = random.choice(root_token.Connections[0]).FollowingToken if root_token is not None and len(root_token.Connections[0]) > 0 else None
+
+    if random_root is None:
+        return "No starting token found."
+    return GenerateLikelyString(multigram, random_root)
+
+
+def FindBestNextToken(multigram: MultiGram, token_history: list[TokenString]) -> TokenString:
+    """
+    Find the best next token based on the current token's relationships.
+    This function uses the token's connections to determine the next likely token.
+    """
+    likely_tokens = {}
+
+    history_length = len(token_history) if len(token_history) < Settings.max_token_strength else Settings.max_token_strength
+    for distance in range(1, history_length + 1):
+        token = token_history[-distance]
+        distance_multiplier = (history_length - distance + 1) / history_length
+
+        pruned_tokens = {}
+        for connection in token.Connections[distance - 1]:  # Assuming distance 1 connections are at index 0
+            #print(f'Examining connection from {token.token_raw} to {connection.FollowingToken.token_raw if connection.FollowingToken is not None else "<None>"} with strength {connection.Strength} at distance {connection.Distance}')
+            if distance > 1 and connection.FollowingToken in likely_tokens:
+                pruned_tokens[connection.FollowingToken] = likely_tokens[connection.FollowingToken] + connection.SoftmaxStrength * distance_multiplier
+            elif distance == 1 and connection.FollowingToken not in likely_tokens:
+                likely_tokens[connection.FollowingToken] = connection.SoftmaxStrength * distance_multiplier
+
+        if distance > 1:
+            likely_tokens = dict(pruned_tokens)     # copy contents, not reference.
+
+    print()
+    print('*************************************************')
+    print(f'Finding next likely token out of {len(likely_tokens)} possibilities after ' + ' -> '.join(token_history[i].token_raw for i in range(0, len(token_history))))
+    for token, strength in likely_tokens.items():
+        print(f"  Possible next token: '{token.token_raw}' with strength {strength}")
+    print('*************************************************')
+    print()
+
+    likely_token = max(likely_tokens, key=likely_tokens.get, default=None)
+    if likely_token is not None:
+        max_strength = likely_tokens[likely_token] if likely_token is not None else 0
+        print(f'Most likely next token for "{token_history[-1].token_raw}" is {likely_token.token_raw if likely_token is not None else "<None>"} with strength {max_strength}')
+
+    return likely_token
+
+

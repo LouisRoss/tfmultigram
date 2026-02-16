@@ -63,7 +63,7 @@ class MultiGram:
             if self.settle_count <= 0:
                 self.ClearRecentMemory()
                 start_of_sequence_token = self.token_source.GetNext(TokenSourceFlags.Flag_StartOfSequence)
-                self.ConnectToken(start_of_sequence_token, 0)
+                self.ConnectToken(start_of_sequence_token, 1.0)
                 self.settle_count = 0
 
         if self.token_source is None or self.settle_count != 0:
@@ -178,6 +178,10 @@ class MultiGram:
             # Remember the most recently followed token for next follow.  Null is ok, for start of new line.
             self.most_recently_followed_token = following_token
 
+    def Softmax(self) -> None:
+        for token in self.tokens:
+            if token is not None:
+                token.Softmax()
 
 
     def ConnectToken(self, token, threshold_score):

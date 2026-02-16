@@ -19,6 +19,7 @@ class TokenBase(ABC):
         self.CurrentStrength = 0
 
         self.Connections = [[] for i in range(Settings.max_token_strength)]
+        self.SoftmaxConnections = [[] for i in range(Settings.max_token_strength)]
         self.NomalizedConnections = [[] for i in range(Settings.max_token_strength)]
         self.ConnectionCount = [0 for i in range(Settings.max_token_strength)]
         self.TotalConnectionStrength = [0 for i in range(Settings.max_token_strength)]
@@ -151,9 +152,24 @@ class TokenBase(ABC):
 
         if not connected_synapse is None:
             connected_synapse.Strength += 1
+            #self.Softmax()      # Do this for strict (and expensive) softmax updating.
 
 
-
+    def Softmax(self) -> None:
+        """
+        Apply the softmax function to the given list of values.
+        values: A list of values to apply the softmax function to
+        returns: A list of values after applying the softmax function
+        """
+        for connectionsAtDistance in self.Connections:
+            exp_values = [pow(2.71828, synapse.Strength) for synapse in connectionsAtDistance]
+            sum_exp_values = sum(exp_values)
+            for i in range(len(connectionsAtDistance)):
+                if sum_exp_values == 0:
+                    connectionsAtDistance[i].SoftmaxStrength = 0
+                else:
+                    connectionsAtDistance[i].SoftmaxStrength = exp_values[i] / sum_exp_values
+    
 
     @abstractmethod
     def CheckIfTokenSimilar(self, ref_token: 'TokenBase') -> int:

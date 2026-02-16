@@ -19,6 +19,7 @@ class TokenSynapse:
         """
         self.FollowingToken = after
         self.Strength = strength
+        self.SoftmaxStrength = 0
 
 
     def Dump(self) -> None:
