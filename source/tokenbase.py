@@ -15,6 +15,8 @@ class TokenBase(ABC):
         self.token_type = token_type
 
         self.start_of_sequence = False
+        self.IntrinsicToken = False
+        self.IntrinsicOperation = None
         self.OrgnizeSeen = False
         self.CurrentStrength = 0
 

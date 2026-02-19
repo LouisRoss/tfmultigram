@@ -18,7 +18,8 @@ class MultiGram:
         self.recent = []
         self.eol_token_next = False
 
-        self.tokens = [None for i in range(Settings.max_tokens)]    
+        self.tokens = [None for i in range(Settings.max_tokens)]
+        self.intrinsic_tokens = []
         self.next_token_index = 0
 
         # Support for following behavior.
@@ -184,6 +185,11 @@ class MultiGram:
                 token.Softmax()
 
 
+    def ExecuteIntrinsicOperation(self):
+        for token in self.self.intrinsic_tokens:
+            if token is not None and token.IntrinsicToken and token.IntrinsicOperation is not None:
+                token.IntrinsicOperation(self.tokens, self.recent)
+
     def ConnectToken(self, token, threshold_score):
         """
         As each token is read from the token source, it is connected into the
@@ -221,6 +227,11 @@ class MultiGram:
         thresholdScore: How similar tokens must be to be considered the same.
         returns: The added token or one found in the Multigram already, identical with the added token.
         """
+        if token.IntrinsicToken:
+            # Intrinsic tokens are added to a separate list, and are not subject to the same limit as regular tokens.
+            self.intrinsic_tokens.append(token)
+            return None
+        
         inserted_token = token.FindTokenIfSeen(self.tokens, threshold_score)
         if inserted_token is None:
             # print(f"Adding new token: {token.token_raw} at index {self.next_token_index}")
