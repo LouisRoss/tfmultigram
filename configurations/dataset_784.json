@@ -1,0 +1,11 @@
+{
+    "name": "Dataset 784 x 32",
+    "iterationCount": 1000,
+    "layerSize": 784,
+    "thickness": 32,
+    "outputWidth": 2,
+    "selectedInitializer": 0,
+    "initializers": [
+        "dataset_initializer"
+    ]
+}
