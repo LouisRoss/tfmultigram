@@ -39,7 +39,7 @@ class LayerModule(tf.Module):
   including learning.
   """
 
-def create_tf_constant(dist, size):
+  def create_tf_constant(dist, size):
     # Create an array where each 'dist' index + 1 is repeated 'size' times in the second dimension
     values = np.arange(1, dist + 1)  # [1, 2, ..., dist]
     values = values[:, None, None]  # Reshape to (dist, 1, 1) for broadcasting
@@ -61,9 +61,11 @@ def create_tf_constant(dist, size):
     self.inputwidth = self.outputwidth * self.interconnectCount
     self.tick = tf.Variable(0)
     self.tflayer_size = tf.constant(self.layer_size, dtype=tf.int32)
-    #self.connections = tf.Variable(self.init_loader.InitializeConnections(), name='connections', trainable=False)
-    self.connections = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, self.layer_size), dtype=tf.int32))
-    self.tokens = tf.Variable(tf.zeros((1, self.layer_size, 1), dtype=tf.int32), name='tokens', trainable=False)
+    self.connections = tf.Variable(self.init_loader.InitializeConnections(), name='connections', trainable=False)
+    self.activeconnections = tf.Variable(np.zeros((self.maxdistance, self.layer_size, self.layer_size), dtype=np.int32), name='activeconnections', trainable=False)
+    self.connectedhistory = tf.Variable(np.zeros((self.maxdistance, self.layer_size, self.layer_size), dtype=np.int32), name='connectedhistory', trainable=False)
+
+    # self.tokens = tf.Variable(tf.zeros((1, self.layer_size, 1), dtype=tf.int32), name='tokens', trainable=False)
     self.token_delays = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_delays', trainable=False)
 
     # self.range_mask has a shape of (maxdistance, layer_size, 1), where the second dimension holds layer_size
@@ -73,36 +75,46 @@ def create_tf_constant(dist, size):
     range_mask = np.full((self.maxdistance, self.layer_size, 1), range_values)  # Broadcast to fill (maxdistance, layer_size, 1)
     self.range_mask = tf.constant(range_mask, dtype=tf.int32)
 
-    self.tokens = tf.Variable(tf.zeros((1, self.layer_size), dtype=tf.int32), name='tokens', trainable=False)
-    self.token_timers = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_timers', trainable=False)
+    self.tokens = tf.Variable(tf.zeros((self.layer_size, 1), dtype=tf.int32), name='tokens', trainable=False)
+    self.token_activations = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_activations', trainable=False)
+    self.token_history = tf.Variable(tf.zeros((self.maxdistance, 1, self.layer_size), dtype=tf.int32), name='token_history', trainable=False)
+    self.token_predictions = tf.Variable(tf.zeros((self.layer_size), dtype=tf.int32), name='token_predictions', trainable=False)
     self.timers = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
+    self.token_timers = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_timers', trainable=False)
     # self.token_timers = self.tokens * self.range_mask
-    self.token_delay = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
-    x = (self.token_delays + self.tokens) * (self.token_delays + self.timers)
+    # self.token_delay = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
+    # self.token_delay = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
 
-    self.connection_delays = tf.Variable(self.init_loader.InitializeConnectionDelays(), name='connection_delays', trainable=False)
-    self.connection_timers = tf.Variable(tf.zeros((self.thickness, self.delaydepth, self.layer_size, self.layer_size), dtype=tf.int32), name='connection_timers', trainable=False)
-    self.connection_post_timers = tf.Variable(tf.zeros((self.thickness, self.layer_size, self.layer_size), dtype=tf.int32), name='connection_post_timers', trainable=False)
-    self.activeconnections = tf.Variable(tf.zeros((self.thickness, self.layer_size, self.layer_size), dtype=tf.int32), name='activeconnections', trainable=False)
-    self.post_time_delay = tf.constant(25)
 
-    self.interconnects = tf.constant(self.init_loader.InitializeInterconnects(), name='interconnects')
-    self.delaytimes = tf.Variable(tf.zeros([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='delaytimes', trainable=False)
-    self.delayguards = tf.Variable(tf.ones([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='delayguards', trainable=False)
+  def PropagateTokens(self):
+    self.token_timers.assign(self.tokens * self.range_mask)
+
+  def ForwardConnectTokens(self):
+    self.token_activations = tf.cast(tf.equal(self.token_timers, 1), tf.int32)
+    # x = (self.token_delays + self.tokens) * (self.token_delays + self.timers)
+    self.token_timers.assign(tf.maximum(tf.subtract(self.token_timers, 1,), 0))
+    self.activeconnections = self.token_activations * self.connections
+
+  def ConnectHistory(self):
+    self.connectedhistory.assign(self.activeconnections * np.full((8,4,4), self.token_history))
+    self.connections.assign_add(tf.cast(tf.greater(self.connectedhistory, 0), tf.int32))
+
+  def PredictNextToken(self):
+    self.token_predictions.assign(tf.reduce_sum(tf.reduce_sum(self.connectedhistory, axis=0), axis=0))
+
+  def PushTokenHistory(self):
+    self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
 
   def __call__(self, datafolder, log=False):
     # Create variables on first call.
     if not self.is_built:
-      self.potentials = tf.Variable(tf.zeros([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='potentials', trainable=False)
-      self.decayedpotentials = tf.Variable(tf.zeros([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='decayedpotentials', trainable=False)
-      self.resets = tf.Variable(tf.zeros([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='resets', trainable=False)
-      self.hebbtimers = tf.Variable(tf.zeros([self.thickness, 1, self.layer_size], dtype=tf.dtypes.int32), dtype=tf.dtypes.int32, name='hebbtimers', trainable=False)
-      initialspikes = np.zeros((self.thickness, 1, self.layer_size), dtype=np.int32)
-      self.spikes = tf.Variable(tf.cast(initialspikes, tf.dtypes.int32), trainable=False)
-      self.dummyspikes = tf.Variable(tf.ones([self.thickness, 1, self.layer_size], dtype=tf.int32), name='dummy_spikes', trainable=False)
-
       self.is_built = True
 
+    self.PropagateTokens()
+    self.ForwardConnectTokens()
+    self.ConnectHistory()
+    self.PredictNextToken()
+    self.PushTokenHistory()
 
 
     if log:
@@ -111,7 +123,7 @@ def create_tf_constant(dist, size):
       tf.print(self.potentials, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'fullactivations.dat')
       tf.print(self.hebbtimers, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'fullhebbtimers.dat')
 
-    return self.spikes
+    return self.token_predictions
   
 
 def Run(configuration: MultigramConfiguration):

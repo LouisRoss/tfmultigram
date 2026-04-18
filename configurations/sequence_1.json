@@ -1,9 +1,9 @@
 {
     "name": "Sequence 64 x 784",
     "iterationCount_deprecated": 1000,
-    "layerSize": 64,
+    "layerSize": 4,
     "thickness_deprecated": 784,
-    "maxdistance": 20,
+    "maxdistance": 8,
     "delayDepth_deprecated": 1,
     "threshold": 12,
     "interconnectCount": 1,

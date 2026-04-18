@@ -33,6 +33,7 @@ class MultigramConfiguration:
         self.layer_size = None
         self.thickness = None
         self.delaydepth = None
+        self.maxdistance = None
         self.threshold = None
         self.interconnectCount = None
         self.outputwidth = None
@@ -99,6 +100,18 @@ class MultigramConfiguration:
     
     def SetDelayDepth(self, delaydepth: int):
         self.delaydepth = delaydepth
+
+    def GetMaxDistance(self) -> int:
+        if not self.maxdistance:
+            if self.valid and 'maxdistance' in self.configuration:
+                self.maxdistance = self.configuration['maxdistance']
+            else:
+                self.maxdistance = 1
+        
+        return self.maxdistance
+    
+    def SetMaxDistance(self, maxdistance: int):
+        self.maxdistance = maxdistance
 
     def GetThreshold(self) -> int:
         if not self.threshold:
