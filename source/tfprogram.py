@@ -87,13 +87,15 @@ class LayerModule(tf.Module):
 
 
   def PropagateTokens(self):
-    self.token_timers.assign(self.tokens * self.range_mask)
+    #self.token_timers.assign(self.tokens * self.range_mask)
+    self.token_timers.assign(self.tokens[:, None])
 
   def ForwardConnectTokens(self):
-    self.token_activations = tf.cast(tf.equal(self.token_timers, 1), tf.int32)
-    # x = (self.token_delays + self.tokens) * (self.token_delays + self.timers)
-    self.token_timers.assign(tf.maximum(tf.subtract(self.token_timers, 1,), 0))
-    self.activeconnections = self.token_activations * self.connections
+    # self.token_activations = tf.cast(tf.equal(self.token_timers, 1), tf.int32)
+    # self.token_timers.assign(tf.maximum(tf.subtract(self.token_timers, 1,), 0))
+    self.token_activations.assign(np.full((8,4,1), self.tokens))
+    # self.activeconnections = self.token_activations * self.connections
+    self.activeconnections.assign(np.full((8,4,4), self.token_activations))
 
   def ConnectHistory(self):
     self.connectedhistory.assign(self.activeconnections * np.full((8,4,4), self.token_history))
@@ -105,12 +107,13 @@ class LayerModule(tf.Module):
   def PushTokenHistory(self):
     self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
 
+  @tf.function
   def __call__(self, datafolder, log=False):
     # Create variables on first call.
     if not self.is_built:
       self.is_built = True
 
-    self.PropagateTokens()
+    # self.PropagateTokens()
     self.ForwardConnectTokens()
     self.ConnectHistory()
     self.PredictNextToken()
