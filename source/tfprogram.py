@@ -102,7 +102,7 @@ class LayerModule(tf.Module):
     self.connections.assign_add(tf.cast(tf.greater(self.connectedhistory, 0), tf.int32))
 
   def PredictNextToken(self):
-    self.token_predictions.assign(tf.reduce_sum(tf.reduce_sum(self.connectedhistory, axis=0), axis=0))
+    self.token_predictions.assign(tf.reduce_sum(tf.reduce_sum(self.activeconnections * self.connections, axis=0), axis=0))
 
   def PushTokenHistory(self):
     self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
