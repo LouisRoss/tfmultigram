@@ -79,28 +79,13 @@ class LayerModule(tf.Module):
     self.activeconnections = tf.Variable(np.zeros((self.maxdistance, self.layer_size, self.layer_size), dtype=np.int32), name='activeconnections', trainable=False)
     self.connectedhistory = tf.Variable(np.zeros((self.maxdistance, self.layer_size, self.layer_size), dtype=np.int32), name='connectedhistory', trainable=False)
 
-    # self.tokens = tf.Variable(tf.zeros((1, self.layer_size, 1), dtype=tf.int32), name='tokens', trainable=False)
-    self.token_delays = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_delays', trainable=False)
-
-    # self.range_mask has a shape of (maxdistance, layer_size, 1), where the second dimension holds layer_size
-    # copies of the maxdistance index: [[[1],[1],1...], [[2],[2],[2]...], ...]. 
-    range_values = tf.range(1, self.maxdistance + 1)                           # [1, 2, ..., maxdistance]
-    range_values = range_values[:, None, None]                                  # Reshape to (maxdistance, 1, 1) for broadcasting
-    range_mask = np.full((self.maxdistance, self.layer_size, 1), range_values)  # Broadcast to fill (maxdistance, layer_size, 1)
-    self.range_mask = tf.constant(range_mask, dtype=tf.int32)
-
     self.tokens = tf.Variable(tf.zeros((self.layer_size, 1), dtype=tf.int32), name='tokens', trainable=False)
     self.token_activations = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_activations', trainable=False)
     self.token_history = tf.Variable(tf.zeros((self.maxdistance, 1, self.layer_size), dtype=tf.int32), name='token_history', trainable=False)
     self.token_predictions = tf.Variable(tf.zeros((self.layer_size), dtype=tf.int32), name='token_predictions', trainable=False)
-    self.timers = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
-    self.token_timers = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_timers', trainable=False)
     self.token_embeddings = tf.Variable(tf.zeros([self.layer_size, self.embedding_length], dtype=tf.float32), name='token_embeddings', trainable=False)
     self.token_strings = tf.Variable(tf.zeros((self.layer_size), dtype=tf.string), name='token_strings', trainable=False)
     self.current_new_token_index = tf.Variable(0)
-    # self.token_timers = self.tokens * self.range_mask
-    # self.token_delay = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
-    # self.token_delay = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32))
 
 
   def AcceptToken(self, token: str):
@@ -125,36 +110,8 @@ class LayerModule(tf.Module):
       self.tokens.assign(tf.tensor_scatter_nd_update(self.tokens, [[next_token_index, 0]], [1]))
       self.token_strings.assign(tf.tensor_scatter_nd_update(self.token_strings, [[next_token_index]], [token]))
 
-    """
-    similarity = tf.reduce_max(dot_product).value()
-    index = int(tf.math.argmax(dot_product))
-    # values, indices = tf.math.top_k(dot_product, k=1)
-    # similarity = float(values[0])
-    # index = int(indices[0])
-    print(f'Found similarity {similarity} at index {index}')
-    if similarity > self.embedding_threshold:
-        # Token is similar to an existing one, activate the corresponding token index
-        self.tokens.assign(tf.tensor_scatter_nd_update(self.tokens, [[index]], [[1]]))
-    else:
-        # Token is new, add it to the embeddings and activate the new index
-        if self.current_new_token_index < self.layer_size:
-            self.token_embeddings.assign(tf.tensor_scatter_nd_update(self.token_embeddings, [[self.current_new_token_index]], [embedding]))
-            self.tokens.assign(tf.tensor_scatter_nd_update(self.tokens, [[self.current_new_token_index]], [[1]]))
-            self.token_strings[self.current_new_token_index] = token
-            self.current_new_token_index += 1
-        else:
-            raise ValueError("Maximum number of unique tokens reached.")
-    """
-
-  def PropagateTokens(self):
-    #self.token_timers.assign(self.tokens * self.range_mask)
-    self.token_timers.assign(self.tokens[:, None])
-
   def ForwardConnectTokens(self):
-    # self.token_activations = tf.cast(tf.equal(self.token_timers, 1), tf.int32)
-    # self.token_timers.assign(tf.maximum(tf.subtract(self.token_timers, 1,), 0))
     self.token_activations.assign(tf.broadcast_to(self.tokens, [self.maxdistance, self.layer_size, 1]))
-    # self.activeconnections = self.token_activations * self.connections
     self.activeconnections.assign(tf.broadcast_to(self.token_activations, [self.maxdistance, self.layer_size, self.layer_size]))
 
   def ConnectHistory(self):
@@ -173,7 +130,6 @@ class LayerModule(tf.Module):
     if not self.is_built:
       self.is_built = True
 
-    # self.PropagateTokens()
     self.AcceptToken(token)
     self.ForwardConnectTokens()
     self.ConnectHistory()
