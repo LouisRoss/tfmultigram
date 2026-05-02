@@ -50,3 +50,5 @@ class BaseInitializer:
 
     return initialspikes
 
+def MakeInitializer(configuration):
+  return BaseInitializer(configuration)

@@ -29,12 +29,14 @@ class MultigramConfiguration:
 
     def Initialize(self):
         self.name = None
+        self.description = None
         self.iteration_count = None
         self.layer_size = None
         self.thickness = None
         self.delaydepth = None
         self.maxdistance = None
         self.threshold = None
+        self.embedding_length = None
         self.interconnectCount = None
         self.outputwidth = None
         self.selected_initializer = None
@@ -53,6 +55,18 @@ class MultigramConfiguration:
     def SetName(self, name: str):
         self.name = name
     
+    def GetDescription(self) -> str:
+        if not self.description:
+            if self.valid and 'description' in self.configuration:
+                self.description = self.configuration['description']
+            else:      
+                self.description = 'Description not available.'
+
+        return self.description
+    
+    def SetDescription(self, description: str):
+        self.description = description
+
     def GetIterationCount(self) -> int:
         if not self.iteration_count:
             if self.valid and 'iterationCount' in self.configuration:
@@ -112,6 +126,18 @@ class MultigramConfiguration:
     
     def SetMaxDistance(self, maxdistance: int):
         self.maxdistance = maxdistance
+
+    def GetEmbeddingLength(self) -> int:
+        if not self.embedding_length:
+            if self.valid and 'embedding_length' in self.configuration:
+                self.embedding_length = self.configuration['embedding_length']
+            else:
+                self.embedding_length = 0
+        
+        return self.embedding_length
+    
+    def SetEmbeddingLength(self, embedding_length: int):
+        self.embedding_length = embedding_length
 
     def GetThreshold(self) -> int:
         if not self.threshold:
