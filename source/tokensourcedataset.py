@@ -9,7 +9,7 @@ from tokentimestamp import TokenTimestamp
 from tokensourcebase import TokenSourceBase
 
 sentences_pattern = re.compile(r"[\w+\s]+.")
-words_pattern = re.compile(r"([\w]+)(.)")
+words_pattern = re.compile(r'([\w]+)(.)')
 
 class TokenSourceDataset(TokenSourceBase):
     """
@@ -74,6 +74,7 @@ class TokenSourceDataset(TokenSourceBase):
         # and then read the tokens from each sentence one at a time.
         self.story = []
         self.current_sentence = []
+        self.story_tokens = []
         self.current_delimiter = ' '
 
         self.max_story = len(self.dataset['train']) if self.max_lines <= 0 else self.max_lines
@@ -100,13 +101,31 @@ class TokenSourceDataset(TokenSourceBase):
         token = self.GetTokenFromLine()
         if token is not None:
             return token
-
+        """
         token = self.GetLineFromStory()
         if token is not None:
             return token
 
         token = self.GetStoryFromDataset()
-        return token
+        """
+        self.GetStoryTokensFromDataset()
+        return self.GetTokenFromLine()
+    
+    def GetStoryTokensFromDataset(self) -> None:
+        """
+        Returns the next story from the dataset being read, as a list of tokens.
+        If the end of the dataset is reached, returns None.
+        """
+        if self.current_story < self.max_story:
+            tiny_story = self.dataset['train'][self.current_story]['text']
+            self.current_story += 1
+            print()
+            print('************************************************')
+            print(f"Read {self.current_story} stories of {self.max_story} from {self.datasetname}")
+            print('************************************************')
+
+            self.current_sentence = words_pattern.findall(tiny_story)
+        
 
     def GetStoryFromDataset(self) -> TokenBase:
         """

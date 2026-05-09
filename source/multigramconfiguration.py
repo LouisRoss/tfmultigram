@@ -30,10 +30,7 @@ class MultigramConfiguration:
     def Initialize(self):
         self.name = None
         self.description = None
-        self.iteration_count = None
         self.layer_size = None
-        self.thickness = None
-        self.delaydepth = None
         self.maxdistance = None
         self.threshold = None
         self.embedding_length = None
@@ -67,18 +64,6 @@ class MultigramConfiguration:
     def SetDescription(self, description: str):
         self.description = description
 
-    def GetIterationCount(self) -> int:
-        if not self.iteration_count:
-            if self.valid and 'iterationCount' in self.configuration:
-                self.iteration_count = self.configuration['iterationCount']
-            else:
-                self.iteration_count = 0
-        
-        return self.iteration_count
-
-    def SetIterationCount(self, iteration: int):
-        self.iteration_count = iteration
-
     def GetLayerSize(self) -> int:
         if not self.layer_size:
             if self.valid and 'layerSize' in self.configuration:
@@ -90,30 +75,6 @@ class MultigramConfiguration:
     
     def SetLayerSize(self, layer_size: int):
         self.layer_size = layer_size
-
-    def GetThickness(self) -> int:
-        if not self.thickness:
-            if self.valid and 'thickness' in self.configuration:
-                self.thickness = self.configuration['thickness']
-            else:
-                self.thickness = 0
-        
-        return self.thickness
-    
-    def SetThickness(self, thickness: int):
-        self.thickness = thickness
-
-    def GetDelayDepth(self) -> int:
-        if not self.delaydepth:
-            if self.valid and 'delayDepth' in self.configuration:
-                self.delaydepth = self.configuration['delayDepth']
-            else:
-                self.delaydepth = 1
-        
-        return self.delaydepth
-    
-    def SetDelayDepth(self, delaydepth: int):
-        self.delaydepth = delaydepth
 
     def GetMaxDistance(self) -> int:
         if not self.maxdistance:

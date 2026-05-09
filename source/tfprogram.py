@@ -19,7 +19,7 @@ EMPTY_EMBEDDING = [0.0] * 768  # Assuming the embedding size is 768, adjust as n
 EMPTY_EMBEDDING[0] = 1.0  # Set the first element to 1.0 to indicate an empty embedding
 
 
-path = '/record/'
+path = '/record/multigram/'
 basefoldername = 'simulation'
 fileparse = r'^([a-zA-Z]+)(\d*)$'
 
@@ -125,25 +125,31 @@ class LayerModule(tf.Module):
     self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
 
   @tf.function
-  def __call__(self, datafolder, token, log=False):
+  def __call__(self, datafolder, token_source, log=False):
     # Create variables on first call.
     if not self.is_built:
       self.is_built = True
 
-    self.AcceptToken(token)
-    self.ForwardConnectTokens()
-    self.ConnectHistory()
-    self.PredictNextToken()
-    self.PushTokenHistory()
+    while token_source.IsInputAvailable():
+      token = token_source.GetNext()
+
+      print(f'Processing token: {token.token_raw} into data folder {datafolder}')
+      self.AcceptToken(token.token_raw)
+      self.ForwardConnectTokens()
+      self.ConnectHistory()
+      self.PredictNextToken()
+      self.PushTokenHistory()
 
 
-    if log:
-      #tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'fullconnections.dat')
-      tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.dat')
+    tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.dat')
+    tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.dat')
+    tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.dat')
+    tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_strings.dat')
+    tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.dat')
 
     return self.token_predictions
 
-def MakeLayer(configuration: MultigramConfiguration):
+def MakeLayer(configuration: MultigramConfiguration):#
   initializers = configuration.GetInitializers()
   selected_initializer = configuration.GetSelectedInitializer()
   print(f'Initializers are {initializers}, using initializer {selected_initializer}')
@@ -166,11 +172,13 @@ def Run(configuration: MultigramConfiguration):
 
   layer = MakeLayer(configuration)
 
-  with TokenSourceDataset("roneneldan/TinyStories", 200) as token_source:
-    while token_source.IsInputAvailable():
-      token = token_source.GetNext()
-      print(f'Processing token: {token.token_raw} into data folder {datafolder}')
-      layer(datafolder, token.token_raw, log=True)
+  with TokenSourceDataset("roneneldan/TinyStories", 10) as token_source:
+    #while token_source.IsInputAvailable():
+    #  token = token_source.GetNext()
+    #  print(f'Processing token: {token.token_raw} into data folder {datafolder}')
+      layer(datafolder, token_source, log=False)
+
+  #layer(datafolder, '', log=True)
 
 # Execution starts here.
 if __name__ == "__main__":
