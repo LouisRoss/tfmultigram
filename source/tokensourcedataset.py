@@ -4,11 +4,8 @@ from datasets import load_dataset
 from settings import Settings, TokenSourceFlags
 from tokenbase import TokenBase
 from tokenstring import TokenString
-#from tokenstringembed import TokenStringEmbed
-from tokentimestamp import TokenTimestamp
 from tokensourcebase import TokenSourceBase
 
-sentences_pattern = re.compile(r"[\w+\s]+.")
 words_pattern = re.compile(r'([\w]+)(.)')
 
 class TokenSourceDataset(TokenSourceBase):
@@ -101,70 +98,11 @@ class TokenSourceDataset(TokenSourceBase):
         token = self.GetTokenFromLine()
         if token is not None:
             return token
-        """
-        token = self.GetLineFromStory()
-        if token is not None:
-            return token
 
-        token = self.GetStoryFromDataset()
-        """
         self.GetStoryTokensFromDataset()
         return self.GetTokenFromLine()
-    
-    def GetStoryTokensFromDataset(self) -> None:
-        """
-        Returns the next story from the dataset being read, as a list of tokens.
-        If the end of the dataset is reached, returns None.
-        """
-        if self.current_story < self.max_story:
-            tiny_story = self.dataset['train'][self.current_story]['text']
-            self.current_story += 1
-            print()
-            print('************************************************')
-            print(f"Read {self.current_story} stories of {self.max_story} from {self.datasetname}")
-            print('************************************************')
 
-            self.current_sentence = words_pattern.findall(tiny_story)
-        
 
-    def GetStoryFromDataset(self) -> TokenBase:
-        """
-        Returns the next story from the dataset being read.
-        If the end of the dataset is reached, returns None.
-        """
-        if self.current_story < self.max_story:
-            tiny_story = self.dataset['train'][self.current_story]['text']
-            self.current_story += 1
-            print()
-            print('************************************************')
-            print(f"Read {self.current_story} stories of {self.max_story} from {self.datasetname}")
-            print('************************************************')
-
-            # Split the current line into sentences, and then split each sentence into words and delimiters
-            self.story = sentences_pattern.findall(tiny_story)
-            return self.GetLineFromStory()
-        else:
-            return None
-        
-    def GetLineFromStory(self) -> TokenBase:
-        """
-        Returns the next line from the current story being read.
-        If the end of the story is reached, returns None.
-        """
-        if len(self.story) > 0:
-            sentence = self.story.pop(0)
-            self.current_sentence = words_pattern.findall(sentence)
-            self.line_count += 1
-            if self.line_count % 100 == 0:
-                print()
-                print('************************************************')
-                print(f"Read {self.line_count} lines from {self.datasetname}")
-                print('************************************************')
-
-            return self.GetTokenFromLine()
-        else:
-            return None
-        
     def GetTokenFromLine(self) -> TokenBase:
         """
         Returns the next token from the current line being read.
@@ -185,4 +123,20 @@ class TokenSourceDataset(TokenSourceBase):
         else:
             return None
                     
+
+    def GetStoryTokensFromDataset(self) -> None:
+        """
+        Returns the next story from the dataset being read, as a list of tokens.
+        If the end of the dataset is reached, returns None.
+        """
+        if self.current_story < self.max_story:
+            tiny_story = self.dataset['train'][self.current_story]['text']
+            self.current_story += 1
+            print()
+            print('************************************************')
+            print(f"Read {self.current_story} stories of {self.max_story} from {self.datasetname}")
+            print('************************************************')
+
+            self.current_sentence = words_pattern.findall(tiny_story)
+        
 
