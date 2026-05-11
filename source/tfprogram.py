@@ -140,6 +140,9 @@ class LayerModule(tf.Module):
       self.PredictNextToken()
       self.PushTokenHistory()
 
+      if token.end_of_line:
+        self.token_history.assign(tf.zeros_like(self.token_history))
+
 
     tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.dat')
     tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.dat')
@@ -173,12 +176,8 @@ def Run(configuration: MultigramConfiguration):
   layer = MakeLayer(configuration)
 
   with TokenSourceDataset("roneneldan/TinyStories", 10) as token_source:
-    #while token_source.IsInputAvailable():
-    #  token = token_source.GetNext()
-    #  print(f'Processing token: {token.token_raw} into data folder {datafolder}')
       layer(datafolder, token_source, log=False)
 
-  #layer(datafolder, '', log=True)
 
 # Execution starts here.
 if __name__ == "__main__":
