@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -22,6 +23,10 @@ EMPTY_EMBEDDING[0] = 1.0  # Set the first element to 1.0 to indicate an empty em
 path = '/record/multigram/'
 basefoldername = 'simulation'
 fileparse = r'^([a-zA-Z]+)(\d*)$'
+
+embeddings_dirty = False
+embedding_map = {}
+
 
 def GetNextSimulationNumber():
   sims = [0]
@@ -85,16 +90,21 @@ class LayerModule(tf.Module):
     self.token_predictions = tf.Variable(tf.zeros((self.layer_size), dtype=tf.int32), name='token_predictions', trainable=False)
     self.token_embeddings = tf.Variable(tf.zeros([self.layer_size, self.embedding_length], dtype=tf.float32), name='token_embeddings', trainable=False)
     self.token_strings = tf.Variable(tf.zeros((self.layer_size), dtype=tf.string), name='token_strings', trainable=False)
-    self.current_new_token_index = tf.Variable(0)
+    self.current_new_token_index = tf.Variable(0, dtype=tf.int32, name='current_new_token_index', trainable=False)
 
 
   def AcceptToken(self, token: str):
-    response = LayerModule.client.embed(model=OLLAMA_MODEL, input=token)
-
     # If no embeddings are returned, use an empty embedding
-    embedding = EMPTY_EMBEDDING
-    if len(response.embeddings) > 0:
-        embedding = response.embeddings[0]
+    embedding = embedding_map.get(token, EMPTY_EMBEDDING)
+
+    if embedding == EMPTY_EMBEDDING:
+      print(f'Embedding for token "{token}" not found, requesting embedding.')
+      response = LayerModule.client.embed(model=OLLAMA_MODEL, input=token)
+
+      if len(response.embeddings) > 0:
+          embedding = response.embeddings[0]
+          embedding_map[token] = embedding
+          embeddings_dirty = True
 
     self.tokens.assign(tf.zeros_like(self.tokens))
 
@@ -130,10 +140,14 @@ class LayerModule(tf.Module):
     if not self.is_built:
       self.is_built = True
 
+    self.AcceptToken('>>>')
+    self.PushTokenHistory()
+
+    print(f'Processing tokens into data folder {datafolder}')
     while token_source.IsInputAvailable():
       token = token_source.GetNext()
 
-      print(f'Processing token: {token.token_raw} into data folder {datafolder}')
+      print(f'{token.token_raw}', end=' ')
       self.AcceptToken(token.token_raw)
       self.ForwardConnectTokens()
       self.ConnectHistory()
@@ -142,13 +156,23 @@ class LayerModule(tf.Module):
 
       if token.end_of_line:
         self.token_history.assign(tf.zeros_like(self.token_history))
+        self.AcceptToken('>>>')
+        self.PushTokenHistory()
+        print()
 
 
-    tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.dat')
-    tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.dat')
-    tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.dat')
-    tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_strings.dat')
-    tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.dat')
+    tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.log')
+    tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.log')
+    tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.log')
+    tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_strings.log')
+    tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.log')
+    # Serialize the tensor structure into a binary string block
+    serialized_connections = tf.io.serialize_tensor(self.connections.read_value())
+    tf.io.write_file(datafolder + 'connections.dat', serialized_connections)
+    serialized_token_history = tf.io.serialize_tensor(self.token_history.read_value())
+    tf.io.write_file(datafolder + 'token_history.dat', serialized_token_history)
+    serialized_token_strings = tf.io.serialize_tensor(self.token_strings.read_value())
+    tf.io.write_file(datafolder + 'token_strings.dat', serialized_token_strings)
 
     return self.token_predictions
 
@@ -164,6 +188,14 @@ def Run(configuration: MultigramConfiguration):
   Run the simulation described by the given configuration.
   """
   #tf.debugging.set_log_device_placement(True)
+  # Load dictionary from a file
+  if os.path.exists("/record/embeddings.json"):
+    print(f'Loading existing embeddings from file.')
+    with open("/record/embeddings.json", "r") as f:
+      embedding_map.update(json.load(f))
+
+  print(f'Embeddings loaded: {len(embedding_map)} entries.')
+
 
   simulationNumber = GetNextSimulationNumber()
   datafolder = MakeSimulationFolder(simulationNumber) + '/'
@@ -175,8 +207,12 @@ def Run(configuration: MultigramConfiguration):
 
   layer = MakeLayer(configuration)
 
-  with TokenSourceDataset("roneneldan/TinyStories", 10) as token_source:
+  with TokenSourceDataset("roneneldan/TinyStories", 25) as token_source:
       layer(datafolder, token_source, log=False)
+
+  if embeddings_dirty:
+    with open("/record/embeddings.json", "w") as f:
+      json.dump(embedding_map, f, indent=4)  # indent adds readability
 
 
 # Execution starts here.
