@@ -93,19 +93,7 @@ class LayerModule(tf.Module):
     self.current_new_token_index = tf.Variable(0, dtype=tf.int32, name='current_new_token_index', trainable=False)
 
 
-  def AcceptToken(self, token: str):
-    # If no embeddings are returned, use an empty embedding
-    embedding = embedding_map.get(token, EMPTY_EMBEDDING)
-
-    if embedding == EMPTY_EMBEDDING:
-      print(f'Embedding for token "{token}" not found, requesting embedding.')
-      response = LayerModule.client.embed(model=OLLAMA_MODEL, input=token)
-
-      if len(response.embeddings) > 0:
-          embedding = response.embeddings[0]
-          embedding_map[token] = embedding
-          embeddings_dirty = True
-
+  def AcceptToken(self, token: 'str', embedding: list[float]):
     self.tokens.assign(tf.zeros_like(self.tokens))
 
     similarities = tf.tensordot(self.token_embeddings, embedding, axes=1)
@@ -132,40 +120,33 @@ class LayerModule(tf.Module):
     self.token_predictions.assign(tf.reduce_sum(tf.reduce_sum(self.activeconnections * self.connections, axis=0), axis=0))
 
   def PushTokenHistory(self):
-    self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
+    return self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
 
-  @tf.function
-  def __call__(self, datafolder, token_source, log=False):
-    # Create variables on first call.
-    if not self.is_built:
-      self.is_built = True
-
-    self.AcceptToken('>>>')
+  def ExecuteTick(self, token, embedding, end_of_line):
+    self.AcceptToken(token, embedding)
+    self.ForwardConnectTokens()
+    self.ConnectHistory()
+    self.PredictNextToken()
     self.PushTokenHistory()
 
-    print(f'Processing tokens into data folder {datafolder}')
-    while token_source.IsInputAvailable():
-      token = token_source.GetNext()
+    #self.token_history.assign(1 - tf.cast(end_of_line, tf.int32) * self.token_history)
+    
+    tf.cond(end_of_line,
+      lambda: self.token_history.assign(tf.zeros_like(self.token_history)),
+      lambda: self.PushTokenHistory())
+    
+    
+    return tf.constant(0)
 
-      print(f'{token.token_raw}', end=' ')
-      self.AcceptToken(token.token_raw)
-      self.ForwardConnectTokens()
-      self.ConnectHistory()
-      self.PredictNextToken()
-      self.PushTokenHistory()
+  def FinalizeTick(self, datafolder):
+    tf.print('Finalizing tick, saving data to', datafolder)
+    tf.print(self.token_strings, summarize=-1, sep=', ')
+    #tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.log')
+    #tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.log')
+    #tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.log')
+    #tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder.ref() + 'token_strings.log')
+    #tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.log')
 
-      if token.end_of_line:
-        self.token_history.assign(tf.zeros_like(self.token_history))
-        self.AcceptToken('>>>')
-        self.PushTokenHistory()
-        print()
-
-
-    tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.log')
-    tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.log')
-    tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.log')
-    tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_strings.log')
-    tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.log')
     # Serialize the tensor structure into a binary string block
     serialized_connections = tf.io.serialize_tensor(self.connections.read_value())
     tf.io.write_file(datafolder + 'connections.dat', serialized_connections)
@@ -173,6 +154,18 @@ class LayerModule(tf.Module):
     tf.io.write_file(datafolder + 'token_history.dat', serialized_token_history)
     serialized_token_strings = tf.io.serialize_tensor(self.token_strings.read_value())
     tf.io.write_file(datafolder + 'token_strings.dat', serialized_token_strings)
+    
+    return tf.constant(0)
+
+  @tf.function(input_signature=(tf.TensorSpec(shape=(), dtype=tf.string), tf.TensorSpec(shape=(), dtype=tf.string), tf.TensorSpec(shape=(768,), dtype=tf.float32), tf.TensorSpec(shape=(), dtype=tf.bool), tf.TensorSpec(shape=(), dtype=tf.bool)))
+  def __call__(self, datafolder, token, embedding, end_of_line, log):
+    # Create variables on first call.
+    if not self.is_built:
+      self.is_built = True
+
+    tf.cond(log,
+      lambda: self.FinalizeTick(datafolder),
+      lambda: self.ExecuteTick(token, embedding, end_of_line))
 
     return self.token_predictions
 
@@ -207,12 +200,40 @@ def Run(configuration: MultigramConfiguration):
 
   layer = MakeLayer(configuration)
 
-  with TokenSourceDataset("roneneldan/TinyStories", 25) as token_source:
-      layer(datafolder, token_source, log=False)
+  with TokenSourceDataset("roneneldan/TinyStories", 200) as token_source:
+    print(f'Processing tokens into data folder {datafolder}')
+    start_of_line_embedding = Get_embedding('>>>')
+    layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
+    while token_source.IsInputAvailable():
+      token = token_source.GetNext()
+      print(f'{token.token_raw}', end=' ')
+      embedding = Get_embedding(token.token_raw)
+      layer(tf.constant(datafolder), tf.constant(token.token_raw), tf.constant(embedding), tf.constant(token.end_of_line), tf.constant(False))
+      if token.end_of_line:
+        layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
+        print()
+
+  layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(True))
 
   if embeddings_dirty:
     with open("/record/embeddings.json", "w") as f:
       json.dump(embedding_map, f, indent=4)  # indent adds readability
+
+def Get_embedding(token: str) -> list[float]:
+  global embeddings_dirty
+
+  embedding = embedding_map.get(token, EMPTY_EMBEDDING)
+
+  if embedding == EMPTY_EMBEDDING:
+    print(f'Embedding for token "{token}" not found, requesting embedding.')
+    response = LayerModule.client.embed(model=OLLAMA_MODEL, input=token)
+
+    if len(response.embeddings) > 0:
+        embedding = response.embeddings[0]
+        embedding_map[token] = embedding
+        embeddings_dirty = True
+
+  return embedding
 
 
 # Execution starts here.
