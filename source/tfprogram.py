@@ -91,6 +91,8 @@ class LayerModule(tf.Module):
     self.token_embeddings = tf.Variable(tf.zeros([self.layer_size, self.embedding_length], dtype=tf.float32), name='token_embeddings', trainable=False)
     self.token_strings = tf.Variable(tf.zeros((self.layer_size), dtype=tf.string), name='token_strings', trainable=False)
     self.current_new_token_index = tf.Variable(0, dtype=tf.int32, name='current_new_token_index', trainable=False)
+    self.token_firing = tf.Variable(tf.zeros((self.layer_size, 1), dtype=tf.int32), name='token_firing', trainable=False)
+    self.token_firing_history = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_firing_history', trainable=False)
 
 
   def AcceptToken(self, token: 'str', embedding: list[float]):
@@ -112,6 +114,15 @@ class LayerModule(tf.Module):
     self.token_activations.assign(tf.broadcast_to(self.tokens, [self.maxdistance, self.layer_size, 1]))
     self.activeconnections.assign(tf.broadcast_to(self.token_activations, [self.maxdistance, self.layer_size, self.layer_size]))
 
+  def FireTokens(self):
+    self.token_firing.assign(self.tokens * self.maxdistance)
+    self.token_firing_history.assign(tf.concat([tf.expand_dims(self.token_firing, 0), self.token_firing_history[:-1:]], axis=0))
+    self.token_firing_history.assign(tf.maximum(tf.subtract(self.token_firing_history, 1), 0))
+    expanded_firing_history = tf.transpose(tf.broadcast_to(self.token_firing_history, [self.maxdistance, self.layer_size, self.layer_size]), perm=[0,2,1])
+    synaptic_contribution = tf.reduce_sum(expanded_firing_history * self.connections, axis=0)
+    token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
+    self.token_predictions.assign(token_firing) # Softmax?
+
   def ConnectHistory(self):
     self.connectedhistory.assign(self.activeconnections * tf.broadcast_to(self.token_history, [self.maxdistance, self.layer_size, self.layer_size]))
     self.connections.assign_add(tf.cast(tf.greater(self.connectedhistory, 0), tf.int32))
@@ -127,7 +138,7 @@ class LayerModule(tf.Module):
     self.ForwardConnectTokens()
     self.ConnectHistory()
     self.PredictNextToken()
-    self.PushTokenHistory()
+    self.PushTokenHistory()  # Is this line necessary? It seems to be called twice, once here and once in the tf.cond below. If it's only needed when end_of_line is False, then it should be removed from here.
 
     #self.token_history.assign(1 - tf.cast(end_of_line, tf.int32) * self.token_history)
     

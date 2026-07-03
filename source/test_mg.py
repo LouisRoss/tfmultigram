@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 
 import pytest
 
@@ -7,6 +8,7 @@ from multigramconfiguration import MultigramConfiguration
 from base_initializer import BaseInitializer
 from tfprogram import LayerModule
 import tensorflow as tf
+import numpy as np
 
 test_config = {
     "name": "Test Multigram configuration",      "description": "Multigram with layer size 4 and max distance 8.",      "layerSize": 4,      "maxdistance": 8,      "embedding_length": 768,      "threshold": 0.9,      "interconnectCount": 1,      "outputWidth": 2,      "selectedInitializer": 0,      "initializers": [
@@ -546,6 +548,262 @@ class TestMultigramLayer:
         assert tf.reduce_sum(layer.activeconnections * layer.connections, axis=0).numpy().flatten().tolist() == [4,3,4,0, 0,0,0,0, 0,0,0,0, 2,2,5,0]
         assert layer.token_predictions.shape == (4,)
         assert layer.token_predictions.numpy().tolist() == [6,5,9,0]
+
+    def test_inference(self, setup_empty_layer):
+        layer = setup_empty_layer
+
+        test_tokens = ["One", "day", "little", "day", "little"]
+
+        seen_tokens = []
+        predicted_tokens = []
+        predicted_certainty = []
+
+        # Add test tokens to input.
+        for i in range(5):
+            for token in test_tokens:
+                layer.AcceptToken(token, embedding_map.get(token, tf.zeros((768,))))
+                seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+                layer.ForwardConnectTokens()
+                layer.ConnectHistory()
+                layer.PredictNextToken()
+                expanded_history = tf.broadcast_to(layer.token_history, [layer.maxdistance, layer.layer_size, layer.layer_size])
+                excitations = tf.reduce_sum((expanded_history * layer.connectedhistory * layer.connections), axis=0)
+                predictions =tf.reduce_sum(excitations, axis=1)
+                predicted_index = tf.argmax(predictions.numpy().flatten())
+                predicted_tokens.append(predicted_index)
+                predicted_certainty.append(predictions[predicted_index].numpy().item())
+                layer.PushTokenHistory()
+            layer.token_history.assign(tf.zeros_like(layer.token_history))
+
+        assert seen_tokens == [0, 1, 2, 1,   2, 0, 1, 2,   1, 2, 0, 1,    2, 1, 2, 0,   1, 2, 1, 2,   0, 1, 2, 1,  2]
+        assert predicted_tokens == [0, 1, 2, 1,  2, 0, 1, 2,  1, 2, 0, 1,  2, 1, 2, 0,  1, 2, 1, 2,  0, 1, 2, 1,  2]
+        assert predicted_certainty == [0, 1, 2, 3,  5, 0, 2, 5,  6, 10, 0, 3,  8, 9, 15, 0,  4, 11, 12, 20,  0, 5, 14, 15, 25]
+        assert expanded_history[0].numpy().flatten().tolist() == [0,1,0,0,  0,1,0,0,  0,1,0,0,  0,1,0,0]
+        assert expanded_history[1].numpy().flatten().tolist() == [0,0,1,0,  0,0,1,0,  0,0,1,0,  0,0,1,0]
+        assert layer.connectedhistory[0].numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  0,1,0,0,  0,0,0,0]
+        assert layer.connectedhistory[1].numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  0,0,1,0,  0,0,0,0]
+        assert layer.connectedhistory[2].numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  0,1,0,0,  0,0,0,0]
+        assert layer.connectedhistory[3].numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  1,0,0,0,  0,0,0,0]
+        assert layer.connectedhistory[4].numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0]
+        assert layer.token_history.numpy().flatten().tolist() == [0,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0, 0,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0]
+
+    def test_fire_tokens_1(self, setup_empty_layer):
+        layer = setup_empty_layer
+
+        test_tokens = ["One", "day", "little", "day", "little"]
+
+        seen_tokens = []
+        train_count = 5
+
+        for i in range(train_count):
+            for token in test_tokens:
+                layer.AcceptToken(token, embedding_map.get(token, tf.zeros((768,))))
+                layer.ForwardConnectTokens()
+                layer.ConnectHistory()
+                layer.PredictNextToken()
+                layer.PushTokenHistory()
+                layer.FireTokens()
+            layer.token_history.assign(tf.zeros_like(layer.token_history))
+            layer.token_firing_history.assign(tf.zeros_like(layer.token_firing_history))
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[0], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        assert layer.tokens.numpy().flatten().tolist() == [1, 0, 0, 0]
+        assert layer.token_firing.numpy().flatten().tolist() == [8, 0, 0, 0]
+        assert layer.token_firing_history.numpy().flatten().tolist() == [7, 0, 0, 0,
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0]
+        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
+        assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  35, 0, 0, 0,  0, 0, 0,0,  0,0,0,0]
+        assert layer.token_predictions.numpy().flatten().tolist() == [0, 35, 0, 0]
+
+    def test_fire_tokens_2(self, setup_empty_layer):
+        layer = setup_empty_layer
+
+        test_tokens = ["One", "day", "little", "day", "little"]
+
+        seen_tokens = []
+        train_count = 5
+
+        for i in range(train_count):
+            for token in test_tokens:
+                layer.AcceptToken(token, embedding_map.get(token, tf.zeros((768,))))
+                layer.ForwardConnectTokens()
+                layer.ConnectHistory()
+                layer.PredictNextToken()
+                layer.PushTokenHistory()
+                layer.FireTokens()
+            layer.token_history.assign(tf.zeros_like(layer.token_history))
+            layer.token_firing_history.assign(tf.zeros_like(layer.token_firing_history))
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[0], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[1], embedding_map.get(test_tokens[1], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        assert layer.tokens.numpy().flatten().tolist() == [0, 1, 0, 0]
+        assert layer.token_firing.numpy().flatten().tolist() == [0, 8, 0, 0]
+        assert layer.token_firing_history.numpy().flatten().tolist() == [0, 7, 0, 0,
+                                                                         6, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0]
+        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
+        assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  0, 0, 0, 0,  30, 70, 0, 0,  0, 0, 0, 0]
+        assert layer.token_predictions.numpy().flatten().tolist() == [0, 0, 100, 0]
+
+    def test_fire_tokens_3(self, setup_empty_layer):
+        layer = setup_empty_layer
+
+        test_tokens = ["One", "day", "little", "day", "little"]
+
+        seen_tokens = []
+        train_count = 5
+
+        for i in range(train_count):
+            for token in test_tokens:
+                layer.AcceptToken(token, embedding_map.get(token, tf.zeros((768,))))
+                layer.ForwardConnectTokens()
+                layer.ConnectHistory()
+                layer.PredictNextToken()
+                layer.PushTokenHistory()
+                layer.FireTokens()
+            layer.token_history.assign(tf.zeros_like(layer.token_history))
+            layer.token_firing_history.assign(tf.zeros_like(layer.token_firing_history))
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[0], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[1], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[2], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        assert layer.tokens.numpy().flatten().tolist() == [0, 0, 1, 0]
+        assert layer.token_firing.numpy().flatten().tolist() == [0, 0, 8, 0]
+        assert layer.token_firing_history.numpy().flatten().tolist() == [0, 0, 7, 0,
+                                                                         0, 6, 0, 0,  
+                                                                         5, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0]
+        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        print(layer.connections.numpy())
+        synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
+        assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  25, 30, 35, 0,  0, 0, 0, 0,  0, 0, 0, 0]
+        assert layer.token_predictions.numpy().flatten().tolist() == [0, 90, 0, 0]
+
+    def test_fire_tokens_3(self, setup_empty_layer):
+        layer = setup_empty_layer
+
+        test_tokens = ["One", "day", "little", "day", "little"]
+
+        seen_tokens = []
+        train_count = 5
+
+        for i in range(train_count):
+            for token in test_tokens:
+                layer.AcceptToken(token, embedding_map.get(token, tf.zeros((768,))))
+                layer.ForwardConnectTokens()
+                layer.ConnectHistory()
+                layer.PredictNextToken()
+                layer.PushTokenHistory()
+                layer.FireTokens()
+            layer.token_history.assign(tf.zeros_like(layer.token_history))
+            layer.token_firing_history.assign(tf.zeros_like(layer.token_firing_history))
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[0], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[1], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[2], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        layer.AcceptToken(test_tokens[0], embedding_map.get(test_tokens[3], tf.zeros((768,))))
+        seen_tokens.append(np.argmax(layer.tokens.numpy().flatten()))
+        layer.ForwardConnectTokens()
+        layer.ConnectHistory()
+        layer.PredictNextToken()
+        layer.PushTokenHistory()
+        layer.FireTokens()
+
+        assert layer.tokens.numpy().flatten().tolist() == [0, 1, 0, 0]
+        assert layer.token_firing.numpy().flatten().tolist() == [0, 8, 0, 0]
+        assert layer.token_firing_history.numpy().flatten().tolist() == [0, 7, 0, 0,
+                                                                         0, 0, 6, 0,  
+                                                                         0, 5, 0, 0,  
+                                                                         4, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0,  
+                                                                         0, 0, 0, 0]
+        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        print(layer.connections.numpy())
+        synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
+        assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  0, 0, 0, 0,  20, 102, 30, 0,  0, 0, 0, 0]
+        assert layer.token_predictions.numpy().flatten().tolist() == [0, 0, 152, 0]
 
     def test_full_cycle(self, setup_empty_layer):
         layer = setup_empty_layer
