@@ -1,52 +1,11 @@
-import json
-import os
-import re
-import sys
-
 from multigramconfiguration import MultigramConfiguration
 from initloader import InitLoader
-from tokenbase import TokenBase
-from tokensourcedataset import TokenSourceDataset
-from ollama import Client
 import tensorflow as tf
 import numpy as np
 
-OLLAMA_HOST = '192.168.1.142'
-OLLAMA_PORT = 11434
-OLLAMA_URL = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
-OLLAMA_MODEL = "embeddinggemma"
-
-EMPTY_EMBEDDING = [0.0] * 768  # Assuming the embedding size is 768, adjust as necessary
-EMPTY_EMBEDDING[0] = 1.0  # Set the first element to 1.0 to indicate an empty embedding
 
 
-path = '/record/multigram/'
-basefoldername = 'simulation'
-fileparse = r'^([a-zA-Z]+)(\d*)$'
-
-embeddings_dirty = False
-embedding_map = {}
-
-
-def GetNextSimulationNumber():
-  sims = [0]
-  obj = os.scandir(path)
-  for entry in obj:
-    if entry.is_dir():
-      parts = re.split(fileparse, entry.name)
-      if parts[1] == 'simulation':
-        sims.append(int(parts[2]))
-
-  return max(sims) + 1
-
-def MakeSimulationFolder(simulationNumber):
-  foldername = path + basefoldername + str(simulationNumber)
-  os.makedirs(foldername, exist_ok=True)
-
-  return foldername
-
-
-class LayerModule(tf.Module):
+class TFLayerModule(tf.Module):
   """
   This class extends the Tensorflow Module class, so that any method decorated
   with the @tf.function notation will be compiled into a compute graph, on first
@@ -54,8 +13,6 @@ class LayerModule(tf.Module):
   The functor of this class implements a single tick of the spiking neural algorithm,
   including learning.
   """
-  client = Client(OLLAMA_URL)
-
   def create_tf_constant(dist, size):
     # Create an array where each 'dist' index + 1 is repeated 'size' times in the second dimension
     values = np.arange(1, dist + 1)  # [1, 2, ..., dist]
@@ -64,19 +21,23 @@ class LayerModule(tf.Module):
     return tf.constant(arr, dtype=tf.int32)  # Adjust dtype as needed
 
 
-  def __init__(self, configuration: MultigramConfiguration, initializer, name=None):
+  def __init__(self, configuration: MultigramConfiguration, name=None):
     super().__init__(name=name)
     self.is_built = False
 
     self.configuration = configuration
-    self.init_loader = initializer
+
+    initializers = self.configuration.GetInitializers()
+    selected_initializer = self.configuration.GetSelectedInitializer()
+    print(f'Initializers are {initializers}, using initializer {selected_initializer}')
+    self.init_loader = InitLoader(initializers[selected_initializer], self.configuration)
 
     self.layer_size = self.configuration.GetLayerSize()
     self.maxdistance = self.configuration.GetMaxDistance()
     self.outputwidth = self.configuration.GetOutputWidth()
-    self.interconnectCount = configuration.GetInterconnectCount()
-    self.embedding_length = configuration.GetEmbeddingLength()
-    self.embedding_threshold = configuration.GetThreshold()
+    self.interconnectCount = self.configuration.GetInterconnectCount()
+    self.embedding_length = self.configuration.GetEmbeddingLength()
+    self.embedding_threshold = self.configuration.GetThreshold()
     self.inputwidth = self.outputwidth * self.interconnectCount
     self.tick = tf.Variable(0)
     self.tflayer_size = tf.constant(self.layer_size, dtype=tf.int32)
@@ -92,7 +53,7 @@ class LayerModule(tf.Module):
     self.token_strings = tf.Variable(tf.zeros((self.layer_size), dtype=tf.string), name='token_strings', trainable=False)
     self.current_new_token_index = tf.Variable(0, dtype=tf.int32, name='current_new_token_index', trainable=False)
     self.token_firing = tf.Variable(tf.zeros((self.layer_size, 1), dtype=tf.int32), name='token_firing', trainable=False)
-    self.token_firing_history = tf.Variable(tf.zeros((self.maxdistance, self.layer_size, 1), dtype=tf.int32), name='token_firing_history', trainable=False)
+    self.token_firing_history = tf.Variable(tf.zeros((self.maxdistance, 1, self.layer_size), dtype=tf.int32), name='token_firing_history', trainable=False)
 
 
   def AcceptToken(self, token: 'str', embedding: list[float]):
@@ -116,9 +77,9 @@ class LayerModule(tf.Module):
 
   def FireTokens(self):
     self.token_firing.assign(self.tokens * self.maxdistance)
-    self.token_firing_history.assign(tf.concat([tf.expand_dims(self.token_firing, 0), self.token_firing_history[:-1:]], axis=0))
+    self.token_firing_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.token_firing), 0), self.token_firing_history[:-1]], axis=0))
     self.token_firing_history.assign(tf.maximum(tf.subtract(self.token_firing_history, 1), 0))
-    expanded_firing_history = tf.transpose(tf.broadcast_to(self.token_firing_history, [self.maxdistance, self.layer_size, self.layer_size]), perm=[0,2,1])
+    expanded_firing_history = tf.broadcast_to(self.token_firing_history, [self.maxdistance, self.layer_size, self.layer_size])
     synaptic_contribution = tf.reduce_sum(expanded_firing_history * self.connections, axis=0)
     token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
     self.token_predictions.assign(token_firing) # Softmax?
@@ -137,8 +98,9 @@ class LayerModule(tf.Module):
     self.AcceptToken(token, embedding)
     self.ForwardConnectTokens()
     self.ConnectHistory()
-    self.PredictNextToken()
-    self.PushTokenHistory()  # Is this line necessary? It seems to be called twice, once here and once in the tf.cond below. If it's only needed when end_of_line is False, then it should be removed from here.
+    #self.PredictNextToken()
+    #self.PushTokenHistory()
+    self.FireTokens()
 
     #self.token_history.assign(1 - tf.cast(end_of_line, tf.int32) * self.token_history)
     
@@ -180,102 +142,3 @@ class LayerModule(tf.Module):
 
     return self.token_predictions
 
-def MakeLayer(configuration: MultigramConfiguration):#
-  initializers = configuration.GetInitializers()
-  selected_initializer = configuration.GetSelectedInitializer()
-  print(f'Initializers are {initializers}, using initializer {selected_initializer}')
-  initializer = InitLoader(initializers[selected_initializer], configuration)
-  return LayerModule(configuration, initializer)
-
-def Run(configuration: MultigramConfiguration):
-  """
-  Run the simulation described by the given configuration.
-  """
-  #tf.debugging.set_log_device_placement(True)
-  # Load dictionary from a file
-  if os.path.exists("/record/embeddings.json"):
-    print(f'Loading existing embeddings from file.')
-    with open("/record/embeddings.json", "r") as f:
-      embedding_map.update(json.load(f))
-
-  print(f'Embeddings loaded: {len(embedding_map)} entries.')
-
-
-  simulationNumber = GetNextSimulationNumber()
-  datafolder = MakeSimulationFolder(simulationNumber) + '/'
-  configuration.Save(datafolder)
-
-  layerSize = configuration.GetLayerSize()
-  distance = configuration.GetMaxDistance()
-  print(f'Running simulation {simulationNumber} with layer size {layerSize}, max distance {distance}, and configuration: {configuration.GetDescription()}')
-
-  layer = MakeLayer(configuration)
-
-  with TokenSourceDataset("roneneldan/TinyStories", 200) as token_source:
-    print(f'Processing tokens into data folder {datafolder}')
-    start_of_line_embedding = Get_embedding('>>>')
-    layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
-    while token_source.IsInputAvailable():
-      token = token_source.GetNext()
-      print(f'{token.token_raw}', end=' ')
-      embedding = Get_embedding(token.token_raw)
-      layer(tf.constant(datafolder), tf.constant(token.token_raw), tf.constant(embedding), tf.constant(token.end_of_line), tf.constant(False))
-      if token.end_of_line:
-        layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
-        print()
-
-  layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(True))
-
-  if embeddings_dirty:
-    with open("/record/embeddings.json", "w") as f:
-      json.dump(embedding_map, f, indent=4)  # indent adds readability
-
-def Get_embedding(token: str) -> list[float]:
-  global embeddings_dirty
-
-  embedding = embedding_map.get(token, EMPTY_EMBEDDING)
-
-  if embedding == EMPTY_EMBEDDING:
-    print(f'Embedding for token "{token}" not found, requesting embedding.')
-    response = LayerModule.client.embed(model=OLLAMA_MODEL, input=token)
-
-    if len(response.embeddings) > 0:
-        embedding = response.embeddings[0]
-        embedding_map[token] = embedding
-        embeddings_dirty = True
-
-  return embedding
-
-
-# Execution starts here.
-if __name__ == "__main__":
-  if len(sys.argv) < 2:
-    print(f'Usage: {sys.argv[0]} <configuration> [initializer number] [iterations] [layersize] [thickness]')
-    exit(0)
-
-  configuration = MultigramConfiguration(sys.argv[1])
-  if not configuration.valid:
-    print(f'Configuration {sys.argv[1]} is not valid')
-    exit(0)
-
-  if len(sys.argv) > 2:
-    initializer = int(sys.argv[2])
-    if initializer >= len(configuration.GetInitializers()):
-      print(f'Initializer {initializer} is bigger than allowed by configuration {sys.argv[1]}, which has {len(configuration.GetInitializers())} initializers')
-      exit(0)
-
-    configuration.SetSelectedInitializer(initializer)
-
-  if len(sys.argv) > 3:
-    configuration.SetIterationCount(int(sys.argv[3]))
-
-  if len(sys.argv) > 4:
-    configuration.SetIterationCount(int(sys.argv[4]))
-
-  if len(sys.argv) > 5:
-    configuration.SetLayerSize(int(sys.argv[5]))
-
-  if len(sys.argv) > 6:
-    configuration.SetThickness(int(sys.argv[6]))
-
-  Run(configuration)

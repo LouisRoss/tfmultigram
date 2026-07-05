@@ -1,12 +1,11 @@
 import os
 import json
-import sys
 
 import pytest
 
 from multigramconfiguration import MultigramConfiguration
 from base_initializer import BaseInitializer
-from tfprogram import LayerModule
+from tflayermodule import TFLayerModule
 import tensorflow as tf
 import numpy as np
 
@@ -429,8 +428,7 @@ embedding_map = {
 def setup_layer():
 
     config = MultigramConfiguration('', test_config)
-    init = BaseInitializer(config)
-    layer = LayerModule(config, init)
+    layer = TFLayerModule(config)
     embedding_map = {}
     if os.path.exists("/record/embeddings.json"):
       print(f'Loading existing embeddings from file.')
@@ -449,8 +447,7 @@ def setup_layer():
 def setup_empty_layer():
 
     config = MultigramConfiguration('', test_config)
-    init = BaseInitializer(config)
-    layer = LayerModule(config, init)
+    layer = TFLayerModule(config)
 
     yield layer
 
@@ -624,7 +621,7 @@ class TestMultigramLayer:
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0]
-        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size])
         synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
         assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  35, 0, 0, 0,  0, 0, 0,0,  0,0,0,0]
         assert layer.token_predictions.numpy().flatten().tolist() == [0, 35, 0, 0]
@@ -674,7 +671,7 @@ class TestMultigramLayer:
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0]
-        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size])
         synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
         assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  0, 0, 0, 0,  30, 70, 0, 0,  0, 0, 0, 0]
         assert layer.token_predictions.numpy().flatten().tolist() == [0, 0, 100, 0]
@@ -732,7 +729,7 @@ class TestMultigramLayer:
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0]
-        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+        expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size])
         print(layer.connections.numpy())
         synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
         assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  25, 30, 35, 0,  0, 0, 0, 0,  0, 0, 0, 0]
@@ -799,7 +796,8 @@ class TestMultigramLayer:
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0,  
                                                                          0, 0, 0, 0]
-        expanded_firing_history = tf.transpose(tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size]), perm=[0,2,1])
+
+        expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.maxdistance, layer.layer_size, layer.layer_size])
         print(layer.connections.numpy())
         synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
         assert synaptic_contribution.numpy().flatten().tolist() == [0, 0, 0, 0,  0, 0, 0, 0,  20, 102, 30, 0,  0, 0, 0, 0]
