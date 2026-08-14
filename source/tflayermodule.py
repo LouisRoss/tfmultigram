@@ -21,9 +21,10 @@ class TFLayerModule(tf.Module):
     return tf.constant(arr, dtype=tf.int32)  # Adjust dtype as needed
 
 
-  def __init__(self, configuration: MultigramConfiguration, name=None):
+  def __init__(self, configuration: MultigramConfiguration, name: str = None, load_existing: bool = False):
     super().__init__(name=name)
-    self.is_built = False
+    self.is_built = tf.Variable(False)
+    self.load_existing = load_existing
 
     self.configuration = configuration
 
@@ -114,11 +115,6 @@ class TFLayerModule(tf.Module):
   def FinalizeTick(self, datafolder):
     tf.print('Finalizing tick, saving data to', datafolder)
     tf.print(self.token_strings, summarize=-1, sep=', ')
-    #tf.print(self.connections, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'connections.log')
-    #tf.print(self.tokens, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'tokens.log')
-    #tf.print(self.token_history, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_history.log')
-    #tf.print(self.token_strings, summarize=-1, sep=',', output_stream= 'file://' + datafolder.ref() + 'token_strings.log')
-    #tf.print(self.token_embeddings, summarize=-1, sep=',', output_stream= 'file://' + datafolder + 'token_embeddings.log')
 
     # Serialize the tensor structure into a binary string block
     serialized_connections = tf.io.serialize_tensor(self.connections.read_value())
@@ -133,8 +129,22 @@ class TFLayerModule(tf.Module):
   @tf.function(input_signature=(tf.TensorSpec(shape=(), dtype=tf.string), tf.TensorSpec(shape=(), dtype=tf.string), tf.TensorSpec(shape=(768,), dtype=tf.float32), tf.TensorSpec(shape=(), dtype=tf.bool), tf.TensorSpec(shape=(), dtype=tf.bool)))
   def __call__(self, datafolder, token, embedding, end_of_line, log):
     # Create variables on first call.
-    if not self.is_built:
-      self.is_built = True
+    if not self.is_built.value():
+      if self.load_existing:
+        # Read the binary block and parse it back to its original data type
+        serialized_connections = tf.io.read_file(datafolder + 'connections.dat')
+        self.connections.assign(tf.io.parse_tensor(serialized_connections, out_type=tf.int32))
+        serialized_token_history = tf.io.read_file(datafolder + 'token_history.dat')
+        self.token_history.assign(tf.io.parse_tensor(serialized_token_history, out_type=tf.int32))
+        serialized_token_strings = tf.io.read_file(datafolder + 'token_strings.dat')
+        self.token_strings.assign(tf.io.parse_tensor(serialized_token_strings, out_type=tf.string))
+
+        tf.print(f'Connections shape: {self.connections.shape}')
+        tf.print(f'Token history shape: {self.token_history.shape}')
+        tf.print(f'Token strings shape: {self.token_strings.shape}')
+        tf.print(self.token_strings)
+
+      self.is_built.assign(True)
 
     tf.cond(log,
       lambda: self.FinalizeTick(datafolder),
