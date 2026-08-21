@@ -117,6 +117,8 @@ class TFLayerModule(tf.Module):
     tf.print(self.token_strings, summarize=-1, sep=', ')
 
     # Serialize the tensor structure into a binary string block
+    serialized_embeddings = tf.io.serialize_tensor(self.token_embeddings.read_value())
+    tf.io.write_file(datafolder + 'embeddings.dat', serialized_embeddings)
     serialized_connections = tf.io.serialize_tensor(self.connections.read_value())
     tf.io.write_file(datafolder + 'connections.dat', serialized_connections)
     serialized_token_history = tf.io.serialize_tensor(self.token_history.read_value())
@@ -132,6 +134,11 @@ class TFLayerModule(tf.Module):
     if not self.is_built.value():
       if self.load_existing:
         # Read the binary block and parse it back to its original data type
+        serialized_embeddings = tf.io.read_file(datafolder + 'embeddings.dat')
+        self.token_embeddings.assign(tf.io.parse_tensor(serialized_embeddings, out_type=tf.float32))
+        empty_embeddings = tf.reduce_sum(self.token_embeddings, axis=1) == 0
+        empty_embeddings_mask = tf.cast(empty_embeddings, tf.int32)
+        self.current_new_token_index.assign(tf.cast(tf.argmax(empty_embeddings_mask, axis=0), dtype=tf.int32))
         serialized_connections = tf.io.read_file(datafolder + 'connections.dat')
         self.connections.assign(tf.io.parse_tensor(serialized_connections, out_type=tf.int32))
         serialized_token_history = tf.io.read_file(datafolder + 'token_history.dat')
@@ -142,6 +149,9 @@ class TFLayerModule(tf.Module):
         tf.print(f'Connections shape: {self.connections.shape}')
         tf.print(f'Token history shape: {self.token_history.shape}')
         tf.print(f'Token strings shape: {self.token_strings.shape}')
+        tf.print(f'Token embeddings shape: {self.token_embeddings.shape}')
+        tf.print(f'Current new token index:')
+        tf.print(self.current_new_token_index)
         tf.print(self.token_strings)
 
       self.is_built.assign(True)
