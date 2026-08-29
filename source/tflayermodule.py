@@ -83,7 +83,19 @@ class TFLayerModule(tf.Module):
     expanded_firing_history = tf.broadcast_to(self.token_firing_history, [self.maxdistance, self.layer_size, self.layer_size])
     synaptic_contribution = tf.reduce_sum(expanded_firing_history * self.connections, axis=0)
     token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
-    self.token_predictions.assign(token_firing) # Softmax?
+    return self.token_predictions.assign(token_firing) # Softmax?
+
+  def ClearState(self):
+    self.tokens.assign(tf.zeros_like(self.tokens))
+    self.token_activations.assign(tf.zeros_like(self.token_activations))
+    self.activeconnections.assign(tf.zeros_like(self.activeconnections))
+    self.connectedhistory.assign(tf.zeros_like(self.connectedhistory))
+    self.token_history.assign(tf.zeros_like(self.token_history))
+    self.token_predictions.assign(tf.zeros_like(self.token_predictions))
+    self.token_firing.assign(tf.zeros_like(self.token_firing))
+    self.token_firing_history.assign(tf.zeros_like(self.token_firing_history))
+
+    return self.token_predictions
 
   def ConnectHistory(self):
     self.connectedhistory.assign(self.activeconnections * tf.broadcast_to(self.token_history, [self.maxdistance, self.layer_size, self.layer_size]))
@@ -93,21 +105,21 @@ class TFLayerModule(tf.Module):
     self.token_predictions.assign(tf.reduce_sum(tf.reduce_sum(self.activeconnections * self.connections, axis=0), axis=0))
 
   def PushTokenHistory(self):
-    return self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
+    self.token_history.assign(tf.concat([tf.expand_dims(tf.transpose(self.tokens), 0), self.token_history[:-1]], axis=0))
 
   def ExecuteTick(self, token, embedding, end_of_line):
     self.AcceptToken(token, embedding)
     self.ForwardConnectTokens()
     self.ConnectHistory()
     #self.PredictNextToken()
-    #self.PushTokenHistory()
-    self.FireTokens()
+    self.PushTokenHistory()
+    #self.FireTokens()
 
     #self.token_history.assign(1 - tf.cast(end_of_line, tf.int32) * self.token_history)
     
     tf.cond(end_of_line,
-      lambda: self.token_history.assign(tf.zeros_like(self.token_history)),
-      lambda: self.PushTokenHistory())
+      lambda: self.ClearState(),
+      lambda: self.FireTokens())
     
     
     return tf.constant(0)
