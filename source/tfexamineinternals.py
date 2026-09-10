@@ -151,10 +151,6 @@ def ExamineTokenHistory(layer: TFLayerModule, indexes: list[int]):
   """
   Examine the token history for the given indexes.
   """
-  #for distance in range(layer.configuration.GetMaxDistance()):
-  #  print(f'Token history at distance {distance + 1}: ', end='')
-  #  print(layer.token_history[distance].numpy())
-  #print()
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
@@ -176,10 +172,6 @@ def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
   """
   Examine the token firing history for the given indexes.
   """
-  #for distance in range(layer.configuration.GetMaxDistance()):
-  #  print(f'Token firing history at distance {distance + 1}: ', end='')
-  #  print(layer.token_firing_history[distance].numpy())
-  #print()
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
@@ -201,27 +193,12 @@ def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
   """
   Examine the connections for the given indexes.
   """
-  #print(f'Layer connections at distance {distance + 1}: ')
-  #print(layer.connections[distance].numpy())
-  #print()
-
-  #source_sum = tf.reduce_sum(layer.connections, axis=1)
-  #distance_sum = tf.reduce_sum(source_sum, axis=1)
-  #print(f'Total connections at each distance: {distance_sum.numpy()}')
-  #print()
-
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
 
   connectionfilename = GetCurrentInternalFolder() + str(runnumber) + '_connections.csv'
   with open(connectionfilename, 'a') as connection_file:
-    #for layer_no in range(layer.configuration.GetMaxDistance()):
-    #  connectionlayer = layer.connections[layer_no]
-    #  collected_layer = tf.gather(connectionlayer, indexes, axis=1)
-    #  np.savetxt(connection_file, collected_layer.numpy(), header=','.join(token_names), delimiter=',', fmt='%d')
-    #  connection_file.write('\n')  # Add a newline to separate layers
-
     header = ',' + ','.join(token_names)
     for layer_no in range(layer.configuration.GetMaxDistance()):
       connection_file.write(f'Distance {layer_no + 1}' + '\n')
@@ -238,22 +215,6 @@ def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
   """
   Examine the synaptic contribution for the given indexes.
   """
-  #expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.configuration.GetMaxDistance(), layer.configuration.GetLayerSize(), layer.configuration.GetLayerSize()])
-  #synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
-  #print()
-
-  #for i in range(layer.configuration.GetLayerSize()):
-  #  print(f'synaptic contribution for token {i+1}: {synaptic_contribution[i].numpy()}')
-  #print()
-
-  #token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
-  #print(f'expanded firing history shape: {expanded_firing_history.shape}')
-  #print(f'synaptic contribution shape: {synaptic_contribution.shape}')
-  #print(f'token firing shape: {token_firing.shape}')
-
-  #print()
-  #print(f'Token firing: {token_firing.numpy()}')
-
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
@@ -261,21 +222,15 @@ def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
   expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.configuration.GetMaxDistance(), layer.configuration.GetLayerSize(), layer.configuration.GetLayerSize()])
   synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
   collected_synapses = tf.gather(synaptic_contribution, indexes, axis=1)
-  print(f'Synaptic contribution shape: {synaptic_contribution.shape}')
 
   synapticcontributionfilename = GetCurrentInternalFolder() + str(runnumber) + '_synaptic_contribution.csv'
   with open(synapticcontributionfilename, 'a') as synaptic_file:
-    #np.savetxt(synaptic_file, synaptic_contribution.numpy(), header=','.join(token_names), delimiter=',', fmt='%d')
-    #synaptic_file.write('\n')  # Add a newline to separate layers
-
     synaptic_contribution_sum = tf.reduce_sum(synaptic_contribution, axis=1)
-    #np.savetxt(synaptic_file, source_sum.numpy(), header=','.join(token_names), delimiter=',', fmt='%d')
     header = ','.join(token_names)
     synaptic_file.write(',Total,' + header + '\n')  # Write the header
     for index in range(len(synaptic_contribution)):
       synaptic_contribution_row = collected_synapses[index].numpy()
       synaptic_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + str(synaptic_contribution_sum[index].numpy()) + ',' + ','.join(map(str, synaptic_contribution_row)) + '\n')
-
 
 
 def ExamineLayerState(layer: TFLayerModule, settings: Dict):
@@ -306,7 +261,7 @@ def ExamineLayerState(layer: TFLayerModule, settings: Dict):
     indexes = settings["indexes"]
 
   # Test, remove
-  indexes = [one_index, two_index, three_index, four_index, five_index, six_index, seven_index, eight_index, nine_index, ten_index]
+  #indexes = [one_index, two_index, three_index, four_index, five_index, six_index, seven_index, eight_index, nine_index, ten_index]
 
 
   if ExaminationOption.SYNAPTIC_CONTRIBUTION in options:
