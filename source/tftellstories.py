@@ -9,6 +9,7 @@ from ollama import Client
 from tokensourcedataset import TokenSourceDataset
 from multigramconfiguration import MultigramConfiguration
 from tflayermodule import TFLayerModule
+from tfexamineinternals import ExamineLayerState, load_embeddings, Get_global_embedding, Get_token_index, IsEndOfLine, PrintTokenPredictions, ExaminationOption
 
 
 OLLAMA_HOST = '192.168.1.142'
@@ -27,6 +28,17 @@ fileparse = r'^([a-zA-Z]+)(\d*)$'
 embeddings_dirty = False
 embedding_map = {}
 client = Client(OLLAMA_URL)
+
+settings = {
+  "options": [
+    ExaminationOption.TOKEN_HISTORY,
+    ExaminationOption.TOKEN_FIRING_HISTORY,
+    ExaminationOption.CONNECTIONS,
+    ExaminationOption.SYNAPTIC_CONTRIBUTION
+  ],
+  "indexes": []
+}
+
 
 
 def MakeSimulationFolder(simulationNumber):
@@ -70,7 +82,6 @@ def Run(simulationNumber: int, configuration: MultigramConfiguration, prompt: li
 
   print(f'Embeddings loaded: {len(embedding_map)} entries.')
 
-
   layerSize = configuration.GetLayerSize()
   distance = configuration.GetMaxDistance()
   print(f'Running simulation {simulationNumber} with layer size {layerSize}, max distance {distance}, and configuration: {configuration.GetDescription()}')
@@ -78,10 +89,12 @@ def Run(simulationNumber: int, configuration: MultigramConfiguration, prompt: li
   datafolder = MakeSimulationFolder(simulationNumber) + '/'
   layer = TFLayerModule(configuration, "TFTellStories", load_existing=True)
 
+  #settings['indexes'] = [Get_token_index(layer, token) for token in prompt]
+
   print(f'Generating tokens from data folder {datafolder}')
   start_of_line_embedding = Get_embedding('>>>')
   layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
-  PrintTokenPredictions(layer, 2000)
+  PrintTokenPredictions(layer, 1)
   #token_predictions = layer.token_predictions.numpy()
   #for i in range(len(token_predictions)):
   #  token = token_predictions[i]
@@ -94,9 +107,10 @@ def Run(simulationNumber: int, configuration: MultigramConfiguration, prompt: li
   for token in prompt:
     embedding = Get_embedding(token)
     end_of_line = IsEndOfLine(token)
-    print(f'Calling model with token "{token}"')
+    print(f'Calling model with prompt token "{token}"')
     layer(tf.constant(datafolder), tf.constant(token), tf.constant(embedding), tf.constant(end_of_line), tf.constant(False))
-    PrintTokenPredictions(layer, 2000)
+    PrintTokenPredictions(layer, 1)
+    ExamineLayerState(layer, settings)
     if end_of_line:
       layer(tf.constant(datafolder), tf.constant('>>>'), tf.constant(start_of_line_embedding), tf.constant(False), tf.constant(False))
     print()
@@ -104,7 +118,7 @@ def Run(simulationNumber: int, configuration: MultigramConfiguration, prompt: li
   story_done = False
   while not story_done:
     # Get the next token prediction from the layer.
-    PrintTokenPredictions(layer, 20)
+    PrintTokenPredictions(layer, 1)
     token_predictions = layer.token_predictions.numpy()
     #print(token_predictions, flush=True)
     predicted_token_index = np.argmax(token_predictions)
@@ -114,6 +128,7 @@ def Run(simulationNumber: int, configuration: MultigramConfiguration, prompt: li
     end_of_line = IsEndOfLine(predicted_token)
 
     # Execute the tick with the predicted token and its embedding.
+    print(f'Calling model with predicted token "{predicted_token}"')
     layer(tf.constant(datafolder), tf.constant(predicted_token), tf.constant(embedding), tf.constant(end_of_line), tf.constant(False))
 
     print(predicted_token, end=' ', flush=True)
@@ -168,5 +183,5 @@ if __name__ == "__main__":
     configuration.SetIterationCount(int(sys.argv[2]))
 
   # Figure out a better way.
-  prompt = ['They', 'also', 'helped']
+  prompt = ['they', 'also', 'helped']
   Run(simulationNumber, configuration, prompt)
