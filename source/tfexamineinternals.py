@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import csv
 import json
 from enum import Enum
 from typing import Dict
@@ -144,7 +145,6 @@ def PrintTokenPredictions(layer: TFLayerModule, threshold: int = 20):
   predicted_token_index = np.argmax(token_predictions)
   predicted_token = layer.token_strings[predicted_token_index].numpy().decode('utf-8')
   print(f'Predicted token: "{predicted_token}" with count {token_predictions[predicted_token_index]}', flush=True)
-  print()
 
 
 def ExamineTokenHistory(layer: TFLayerModule, indexes: list[int]):
@@ -154,11 +154,21 @@ def ExamineTokenHistory(layer: TFLayerModule, indexes: list[int]):
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
+  token_names = [token_name for token_name in token_names if token_name != '']
 
   history2d = tf.squeeze(layer.token_history)
   collected_history = tf.gather(history2d, indexes, axis=1)
+  history_data = []
+  history_data.append(['Distance'] + token_names)
+  for distance in range(layer.configuration.GetMaxDistance()):
+    history_distance = collected_history[distance].numpy()
+    history_data.append([f'{distance + 1}'] + list(map(str, history_distance)))
 
   historyfilename = GetCurrentInternalFolder() + str(runnumber) + '_token_history.csv'
+  with open(historyfilename, mode='w', newline='', encoding='utf-8') as history_file:
+    writer = csv.writer(history_file)
+    writer.writerows(history_data)
+"""
   with open(historyfilename, 'a') as history_file:
     header = ',' + ','.join(token_names)
     history_file.write(header + '\n')  # Write the header
@@ -166,7 +176,7 @@ def ExamineTokenHistory(layer: TFLayerModule, indexes: list[int]):
       history_distance = collected_history[distance].numpy()
       history_file.write(f'Distance {distance + 1},' + ','.join(map(str, history_distance)) + '\n')
     history_file.write('\n')  # Add a newline to separate layers
-  
+"""  
 
 def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
   """
@@ -175,11 +185,22 @@ def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
+  token_names = [token_name for token_name in token_names if token_name != '']
 
   history2d = tf.squeeze(layer.token_firing_history)
   collected_firing_history = tf.gather(history2d, indexes, axis=1)
 
+  firing_history_data = []
+  firing_history_data.append(['Distance'] + token_names)
+  for distance in range(layer.configuration.GetMaxDistance()):
+    firing_distance = collected_firing_history[distance].numpy()
+    firing_history_data.append([f'{distance + 1}'] + list(map(str, firing_distance)))
+
   firinghistoryfilename = GetCurrentInternalFolder() + str(runnumber) + '_token_firing_history.csv'
+  with open(firinghistoryfilename, mode='w', newline='', encoding='utf-8') as firing_history_file:
+    writer = csv.writer(firing_history_file)
+    writer.writerows(firing_history_data)
+"""
   with open(firinghistoryfilename, 'a') as firing_history_file:
     header = ',' + ','.join(token_names)
     firing_history_file.write(header + '\n')  # Write the header
@@ -187,6 +208,7 @@ def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
       firing_distance = collected_firing_history[distance].numpy()
       firing_history_file.write(f'Distance {distance + 1},' + ','.join(map(str, firing_distance)) + '\n')
     firing_history_file.write('\n')  # Add a newline to separate layers
+"""
 
 
 def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
@@ -196,8 +218,24 @@ def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
+  token_names = [token_name for token_name in token_names if token_name != '']
+
+  connection_data = []
+  connection_data.append(['Distance', 'Token'] + token_names)
+
+  distance = 1
+  for layer_no in range(layer.configuration.GetMaxDistance()):
+    connectionlayer = layer.connections[layer_no]
+    collected_layer = tf.gather(connectionlayer, indexes, axis=1).numpy()
+    for index in range(len(collected_layer)):
+      firing_distance = collected_layer[index]
+      connection_data.append([f'{distance}', layer.token_strings[index].numpy().decode('utf-8')] + list(map(str, firing_distance)))
 
   connectionfilename = GetCurrentInternalFolder() + str(runnumber) + '_connections.csv'
+  with open(connectionfilename, mode='w', newline='', encoding='utf-8') as connection_file:
+    writer = csv.writer(connection_file)
+    writer.writerows(connection_data)
+"""
   with open(connectionfilename, 'a') as connection_file:
     header = ',' + ','.join(token_names)
     for layer_no in range(layer.configuration.GetMaxDistance()):
@@ -209,7 +247,7 @@ def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
       for index in range(len(collected_layer)):
         firing_distance = collected_layer[index]
         connection_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + ','.join(map(str, firing_distance)) + '\n')
-
+"""
 
 def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
   """
@@ -218,12 +256,38 @@ def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
   if len(indexes) == 0:
     indexes = list(range(layer.configuration.GetLayerSize()))
   token_names = [layer.token_strings[i].numpy().decode('utf-8') for i in indexes]
+  token_names = [token_name for token_name in token_names if token_name != '']
 
   expanded_firing_history = tf.broadcast_to(layer.token_firing_history, [layer.configuration.GetMaxDistance(), layer.configuration.GetLayerSize(), layer.configuration.GetLayerSize()])
-  synaptic_contribution = tf.reduce_sum(expanded_firing_history * layer.connections, axis=0)
+  layer_contribution = expanded_firing_history * layer.connections
+  synaptic_contribution = tf.reduce_sum(layer_contribution, axis=0)
+  #synaptic_contribution_sum = tf.reduce_sum(synaptic_contribution, axis=1)
+  synaptic_contribution_sum = tf.math.count_nonzero(synaptic_contribution, axis=1)
   collected_synapses = tf.gather(synaptic_contribution, indexes, axis=1)
 
+  synaptic_contribution_data = []
+  synaptic_contribution_data.append(['Distance', 'Token', 'Total'] + token_names)
+  distance = 0
+  for index in range(len(synaptic_contribution)):
+    synaptic_contribution_row = collected_synapses[index].numpy()
+    synaptic_contribution_data.append([f'{distance}', layer.token_strings[index].numpy().decode('utf-8'), str(synaptic_contribution_sum[index].numpy())] + list(map(str, synaptic_contribution_row)))
+
+  for layer_no in range(layer.configuration.GetMaxDistance()):
+    distance += 1
+    layer_synaptic_contribution = layer_contribution[layer_no]
+    layer_synaptic_contribution_sum = tf.reduce_sum(layer_synaptic_contribution, axis=1)
+    collected_layer_synaptic_contribution = tf.gather(layer_synaptic_contribution, indexes, axis=1)
+
+    for index in range(len(synaptic_contribution)):
+      layer_synaptic_contribution_row = collected_layer_synaptic_contribution[index].numpy()
+      synaptic_contribution_data.append([f'{distance}', layer.token_strings[index].numpy().decode('utf-8'), str(layer_synaptic_contribution_sum[index].numpy())] + list(map(str, layer_synaptic_contribution_row)))
+
   synapticcontributionfilename = GetCurrentInternalFolder() + str(runnumber) + '_synaptic_contribution.csv'
+  with open(synapticcontributionfilename, mode='w', newline='', encoding='utf-8') as synaptic_file:
+    writer = csv.writer(synaptic_file)
+    writer.writerows(synaptic_contribution_data)
+
+"""
   with open(synapticcontributionfilename, 'a') as synaptic_file:
     synaptic_contribution_sum = tf.reduce_sum(synaptic_contribution, axis=1)
     header = ','.join(token_names)
@@ -231,24 +295,26 @@ def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
     for index in range(len(synaptic_contribution)):
       synaptic_contribution_row = collected_synapses[index].numpy()
       synaptic_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + str(synaptic_contribution_sum[index].numpy()) + ',' + ','.join(map(str, synaptic_contribution_row)) + '\n')
+    synaptic_file.write('\n')  # Add a newline to separate layers
 
+    for layer_no in range(layer.configuration.GetMaxDistance()):
+      layer_synaptic_contribution = layer_contribution[layer_no]
+      layer_synaptic_contribution_sum = tf.reduce_sum(layer_synaptic_contribution, axis=1)
+      collected_layer_synaptic_contribution = tf.gather(layer_synaptic_contribution, indexes, axis=1)
+      synaptic_file.write(f'Distance {layer_no + 1}' + '\n')
+      synaptic_file.write(',Total,' + header + '\n')  # Write the header
+
+      for index in range(len(synaptic_contribution)):
+        layer_synaptic_contribution_row = collected_layer_synaptic_contribution[index].numpy()
+        synaptic_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + str(layer_synaptic_contribution_sum[index].numpy()) + ',' + ','.join(map(str, layer_synaptic_contribution_row)) + '\n')
+      synaptic_file.write('\n')  # Add a newline to separate layers
+"""
 
 def ExamineLayerState(layer: TFLayerModule, settings: Dict):
   """
   Examine the internal state of the layer.
   """
   global runnumber
-
-  one_index   = Get_token_index(layer, '1')
-  two_index   = Get_token_index(layer, '2')
-  three_index = Get_token_index(layer, '3')
-  four_index  = Get_token_index(layer, '4')
-  five_index  = Get_token_index(layer, '5')
-  six_index   = Get_token_index(layer, '6')
-  seven_index = Get_token_index(layer, '7')
-  eight_index = Get_token_index(layer, '8')
-  nine_index  = Get_token_index(layer, '9')
-  ten_index   = Get_token_index(layer, '10')
 
   runnumber += 1
 
