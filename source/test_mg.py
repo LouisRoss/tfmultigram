@@ -5,12 +5,38 @@ import pytest
 
 from multigramconfiguration import MultigramConfiguration
 from base_initializer import BaseInitializer
+from tokensourcedataset import TokenSourceDataset
 from tflayermodule import TFLayerModule
 import tensorflow as tf
 import numpy as np
+from ollama import Client
 
 test_config = {
-    "name": "Test Multigram configuration",      "description": "Multigram with layer size 4 and max distance 8.",      "layerSize": 4,      "maxdistance": 8,      "embedding_length": 768,      "threshold": 0.9,      "interconnectCount": 1,      "outputWidth": 2,      "selectedInitializer": 0,      "initializers": [
+    "name": "Test Multigram configuration",
+    "description": "Multigram with layer size 4 and max distance 8.",
+    "layerSize": 4,
+    "maxdistance": 8,
+    "embedding_length": 768,
+    "threshold": 0.9,
+    "interconnectCount": 1,
+    "outputWidth": 2,
+    "selectedInitializer": 0,
+    "initializers": [
+        "base_initializer"
+    ]
+}
+
+test_config_large = {
+    "name": "Test Multigram large configuration",
+    "description": "Multigram with layer size 2500 and max distance 8.",
+    "layerSize": 2500,
+    "maxdistance": 8,
+    "embedding_length": 768,
+    "threshold": 0.999,
+    "interconnectCount": 1,
+    "outputWidth": 2,
+    "selectedInitializer": 0,
+    "initializers": [
         "base_initializer"
     ]
 }
@@ -423,6 +449,48 @@ embedding_map = {
     ],
 }
 
+OLLAMA_HOST = '192.168.1.142'
+OLLAMA_PORT = 11434
+OLLAMA_URL = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
+OLLAMA_MODEL = "embeddinggemma"
+
+EMPTY_EMBEDDING = [0.0] * 768  # Assuming the embedding size is 768, adjust as necessary
+EMPTY_EMBEDDING[0] = 1.0  # Set the first element to 1.0 to indicate an empty embedding
+
+embeddings_dirty = False
+local_embedding_map = {}
+embeddings_loaded = False
+client = Client(OLLAMA_URL)
+
+def Get_embedding(token: str) -> list[float]:
+    global embeddings_dirty
+    global embeddings_loaded
+    global client
+    global local_embedding_map
+    global EMPTY_EMBEDDING
+
+    # Load dictionary from a file
+    if not embeddings_loaded:
+        if os.path.exists("/record/embeddings.json"):
+            print(f'Loading existing embeddings from file.')
+            with open("/record/embeddings.json", "r") as f:
+                local_embedding_map.update(json.load(f))
+        embeddings_loaded = True
+
+    embedding = local_embedding_map.get(token, EMPTY_EMBEDDING)
+
+    if embedding == EMPTY_EMBEDDING:
+        print(f'Embedding for token "{token}" not found, requesting embedding.')
+        response = client.embed(model=OLLAMA_MODEL, input=token)
+
+        if len(response.embeddings) > 0:
+            embedding = response.embeddings[0]
+            local_embedding_map[token] = embedding
+            embeddings_dirty = True
+
+    return embedding
+
+
 
 @pytest.fixture
 def setup_layer():
@@ -447,6 +515,14 @@ def setup_layer():
 def setup_empty_layer():
 
     config = MultigramConfiguration('', test_config)
+    layer = TFLayerModule(config)
+
+    yield layer
+
+@pytest.fixture
+def setup_large_empty_layer():
+
+    config = MultigramConfiguration('', test_config_large)
     layer = TFLayerModule(config)
 
     yield layer
@@ -510,6 +586,55 @@ class TestMultigramLayer:
         assert tf.reduce_sum(layer.token_embeddings[2]).numpy() == 0
         assert tf.reduce_sum(layer.token_embeddings[3]).numpy() == 0
         assert layer.current_new_token_index.numpy() == 2
+
+    def test_accept_many_tokens(self, setup_large_empty_layer):
+        layer = setup_large_empty_layer
+
+        local_token_registry = []
+        with TokenSourceDataset("roneneldan/TinyStories", 200) as token_source:
+            start_of_line_embedding = Get_embedding('>>>')
+            layer.AcceptToken(">>>", start_of_line_embedding)
+            if ">>>" not in local_token_registry:
+                local_token_registry.append(">>>")
+
+            token_index = -1
+            layer_token_index = -1
+            while token_source.IsInputAvailable():
+                token = token_source.GetNext()
+                embedding = Get_embedding(token.token_raw)
+                layer.AcceptToken(token.token_raw, embedding)
+                if token.token_raw not in local_token_registry and token.token_raw != "":
+                    local_token_registry.append(token.token_raw)
+                if token.end_of_line:
+                    layer.AcceptToken(">>>", start_of_line_embedding)
+                    if ">>>" not in local_token_registry:
+                        local_token_registry.append(">>>")
+                if token.token_raw == "begin":
+                    token_index = local_token_registry.index('begin')
+                    layer_tokens = [str(t, "utf-8") for t in layer.token_strings.numpy().tolist()]
+                    layer_token_index = layer_tokens.index('begin')
+                    print(f"Token 'begin' found at index {token_index} in local registry and index {layer_token_index} in layer tokens.")
+                if layer_token_index != -1:
+                    layer_tokens = [str(t, "utf-8") for t in layer.token_strings.numpy().tolist()]
+                    #if layer_tokens[layer_token_index] != 'begin':
+                    #    print(f"Token 'begin' is no longer at index {layer_token_index} in layer tokens. Current token at that index: {layer_tokens[layer_token_index]}")
+                    
+
+        #assert layer.current_new_token_index.numpy() == len(local_token_registry)
+        layer_tokens = [str(t, "utf-8") for t in layer.token_strings.numpy().tolist()]
+        unique_tokens = list(set(layer_tokens) ^ set(local_token_registry))
+        print(f"Unique tokens in layer: {unique_tokens}")
+        token_index = -1
+        if 'begin' in local_token_registry:
+          token_index = local_token_registry.index('begin')
+        layer_token_index = -1
+        if 'begin' in layer_tokens:
+          layer_token_index = layer_tokens.index('begin')
+        assert token_index != -1
+        assert layer_token_index != -1
+        assert layer_token_index == token_index
+        assert unique_tokens == ['']
+
 
     def test_multigram_forward_connect(self, setup_layer):
         layer = setup_layer
