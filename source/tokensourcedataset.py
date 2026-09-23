@@ -118,7 +118,7 @@ class TokenSourceDataset(TokenSourceBase):
         
         if len(self.current_sentence) > 0:
             word, self.current_delimiter = self.current_sentence.pop(0)
-            token = TokenString(word)
+            token = TokenString(word.lower())
             return token
         else:
             return None
