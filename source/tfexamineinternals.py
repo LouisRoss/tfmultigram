@@ -168,15 +168,7 @@ def ExamineTokenHistory(layer: TFLayerModule, indexes: list[int]):
   with open(historyfilename, mode='w', newline='', encoding='utf-8') as history_file:
     writer = csv.writer(history_file)
     writer.writerows(history_data)
-"""
-  with open(historyfilename, 'a') as history_file:
-    header = ',' + ','.join(token_names)
-    history_file.write(header + '\n')  # Write the header
-    for distance in range(layer.configuration.GetMaxDistance()):
-      history_distance = collected_history[distance].numpy()
-      history_file.write(f'Distance {distance + 1},' + ','.join(map(str, history_distance)) + '\n')
-    history_file.write('\n')  # Add a newline to separate layers
-"""  
+
 
 def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
   """
@@ -200,15 +192,6 @@ def ExamineTokenFiringHistory(layer: TFLayerModule, indexes: list[int]):
   with open(firinghistoryfilename, mode='w', newline='', encoding='utf-8') as firing_history_file:
     writer = csv.writer(firing_history_file)
     writer.writerows(firing_history_data)
-"""
-  with open(firinghistoryfilename, 'a') as firing_history_file:
-    header = ',' + ','.join(token_names)
-    firing_history_file.write(header + '\n')  # Write the header
-    for distance in range(layer.configuration.GetMaxDistance()):
-      firing_distance = collected_firing_history[distance].numpy()
-      firing_history_file.write(f'Distance {distance + 1},' + ','.join(map(str, firing_distance)) + '\n')
-    firing_history_file.write('\n')  # Add a newline to separate layers
-"""
 
 
 def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
@@ -235,19 +218,7 @@ def ExamineConnections(layer: TFLayerModule, indexes: list[int]):
   with open(connectionfilename, mode='w', newline='', encoding='utf-8') as connection_file:
     writer = csv.writer(connection_file)
     writer.writerows(connection_data)
-"""
-  with open(connectionfilename, 'a') as connection_file:
-    header = ',' + ','.join(token_names)
-    for layer_no in range(layer.configuration.GetMaxDistance()):
-      connection_file.write(f'Distance {layer_no + 1}' + '\n')
-      connection_file.write(header + '\n')  # Write the header
-      connectionlayer = layer.connections[layer_no]
-      collected_layer = tf.gather(connectionlayer, indexes, axis=1).numpy()
 
-      for index in range(len(collected_layer)):
-        firing_distance = collected_layer[index]
-        connection_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + ','.join(map(str, firing_distance)) + '\n')
-"""
 
 def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
   """
@@ -287,28 +258,6 @@ def ExamineSynapticContribution(layer: TFLayerModule, indexes: list[int]):
     writer = csv.writer(synaptic_file)
     writer.writerows(synaptic_contribution_data)
 
-"""
-  with open(synapticcontributionfilename, 'a') as synaptic_file:
-    synaptic_contribution_sum = tf.reduce_sum(synaptic_contribution, axis=1)
-    header = ','.join(token_names)
-    synaptic_file.write(',Total,' + header + '\n')  # Write the header
-    for index in range(len(synaptic_contribution)):
-      synaptic_contribution_row = collected_synapses[index].numpy()
-      synaptic_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + str(synaptic_contribution_sum[index].numpy()) + ',' + ','.join(map(str, synaptic_contribution_row)) + '\n')
-    synaptic_file.write('\n')  # Add a newline to separate layers
-
-    for layer_no in range(layer.configuration.GetMaxDistance()):
-      layer_synaptic_contribution = layer_contribution[layer_no]
-      layer_synaptic_contribution_sum = tf.reduce_sum(layer_synaptic_contribution, axis=1)
-      collected_layer_synaptic_contribution = tf.gather(layer_synaptic_contribution, indexes, axis=1)
-      synaptic_file.write(f'Distance {layer_no + 1}' + '\n')
-      synaptic_file.write(',Total,' + header + '\n')  # Write the header
-
-      for index in range(len(synaptic_contribution)):
-        layer_synaptic_contribution_row = collected_layer_synaptic_contribution[index].numpy()
-        synaptic_file.write(f'{layer.token_strings[index].numpy().decode("utf-8")},' + str(layer_synaptic_contribution_sum[index].numpy()) + ',' + ','.join(map(str, layer_synaptic_contribution_row)) + '\n')
-      synaptic_file.write('\n')  # Add a newline to separate layers
-"""
 
 def ExamineLayerState(layer: TFLayerModule, settings: Dict):
   """
@@ -325,10 +274,6 @@ def ExamineLayerState(layer: TFLayerModule, settings: Dict):
   indexes = []
   if "indexes" in settings:
     indexes = settings["indexes"]
-
-  # Test, remove
-  #indexes = [one_index, two_index, three_index, four_index, five_index, six_index, seven_index, eight_index, nine_index, ten_index]
-
 
   if ExaminationOption.SYNAPTIC_CONTRIBUTION in options:
     ExamineSynapticContribution(layer, indexes)
