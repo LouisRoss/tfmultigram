@@ -82,8 +82,9 @@ class TFLayerModule(tf.Module):
     self.token_firing_history.assign(tf.maximum(tf.subtract(self.token_firing_history, 1), 0))
     expanded_firing_history = tf.broadcast_to(self.token_firing_history, [self.maxdistance, self.layer_size, self.layer_size])
     synaptic_contribution = tf.reduce_sum(expanded_firing_history * self.connections, axis=0)
-    token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
-    return self.token_predictions.assign(token_firing) # Softmax?
+    #token_firing = tf.reduce_sum(synaptic_contribution, axis=1)
+    token_firing = tf.math.count_nonzero(synaptic_contribution, axis=1)
+    return self.token_predictions.assign(tf.cast(token_firing, tf.int32)) # Softmax?
 
   def ClearState(self):
     self.tokens.assign(tf.zeros_like(self.tokens))
