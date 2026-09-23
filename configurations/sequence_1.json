@@ -1,10 +1,10 @@
 {
     "name": "Sequence 64 x 784",
     "description": "Multigram with layer size 32 and max distance 8.",
-    "layerSize": 600,
+    "layerSize": 2500,
     "maxdistance": 12,
     "embedding_length": 768,
-    "threshold": 0.9,
+    "threshold": 0.999,
     "interconnectCount": 1,
     "outputWidth": 2,
     "selectedInitializer": 0,
