@@ -137,9 +137,10 @@ def PrintTokenPredictions(layer: TFLayerModule, threshold: int = 20):
   Print the token predictions from the given layer.
   """
   token_predictions = layer.token_predictions.numpy()
+  max_prediction = np.max(token_predictions)
   for i in range(len(token_predictions)):
     token_count = token_predictions[i]
-    if token_count > threshold:
+    if token_count == max_prediction:
       predicted_token = layer.token_strings[i].numpy().decode('utf-8')
       print(f'{predicted_token}({token_count})', end=' ', flush=True)
   predicted_token_index = np.argmax(token_predictions)
